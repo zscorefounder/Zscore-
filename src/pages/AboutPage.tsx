@@ -192,7 +192,13 @@ const AboutPage = () => {
   useEffect(() => {
     const saved = localStorage.getItem('zscore_local_workspace');
     if (saved) {
-      setWorkspaceImages(JSON.parse(saved));
+      const parsed = JSON.parse(saved);
+      // Filter out any default placeholder images if they were saved to localStorage
+      const filtered = parsed.filter((img: any) => !img.url.includes('picsum.photos'));
+      setWorkspaceImages(filtered);
+      if (filtered.length !== parsed.length) {
+        localStorage.setItem('zscore_local_workspace', JSON.stringify(filtered));
+      }
     } else {
       setWorkspaceImages(PERSONAL_INFO.workspace);
     }
@@ -591,7 +597,7 @@ const AboutPage = () => {
               <div key={img.id || i} className="relative group">
                 <ScrapPaper rotation={i % 2 === 0 ? -3 : 3} className="p-2 bg-white" type="plain">
                   <Tape className="-top-4 left-1/2 -translate-x-1/2" rotation={i % 2 === 0 ? 5 : -5} />
-                  <div className="bg-zinc-200 overflow-hidden rounded-sm relative aspect-video">
+                  <div className="bg-zinc-200 overflow-hidden rounded-sm relative">
                     <img 
                       src={img.url} 
                       alt={`Workspace ${i + 1}`} 
@@ -651,11 +657,6 @@ const AboutPage = () => {
             <div className="relative">
               <ScrapPaper type="plain" rotation={2} className="p-4 bg-zinc-100">
                 <div className="aspect-square bg-white rounded-xl border border-black/5 flex items-center justify-center overflow-hidden relative">
-                  <img 
-                    src="https://picsum.photos/seed/process/800/800" 
-                    alt="Process" 
-                    className="w-full h-full object-cover opacity-50 grayscale"
-                  />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Cpu size={80} className="text-yellow-400 opacity-20" />
                   </div>
