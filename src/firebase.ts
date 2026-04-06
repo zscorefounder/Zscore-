@@ -26,7 +26,6 @@ const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
 console.log(`Initializing Firestore with database ID: ${dbId}`);
 const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: true,
 }, dbId);
 
 // Enable offline persistence if possible
