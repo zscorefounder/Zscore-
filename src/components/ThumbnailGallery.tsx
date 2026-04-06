@@ -370,6 +370,9 @@ export const ThumbnailGallery = () => {
           console.error("Firestore Index Error. You may need to create a composite index for category + createdAt.");
         } else if (msg.includes('permission-denied')) {
           setError("Permission denied. Please check security rules.");
+        } else if (msg.includes('could not reach cloud firestore backend') || msg.includes('backend didn\'t respond')) {
+          setError("Connection error. Please check your internet or refresh.");
+          toast.error("Could not reach the database. Retrying in background...");
         } else {
           setError("Failed to load thumbnails. Please try again.");
         }

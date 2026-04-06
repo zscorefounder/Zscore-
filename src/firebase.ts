@@ -26,6 +26,7 @@ const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
 console.log(`Initializing Firestore with database ID: ${dbId}`);
 const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
+  ignoreUndefinedProperties: true,
 }, dbId);
 
 // Enable offline persistence if possible
@@ -54,16 +55,21 @@ async function testConnection() {
       return;
     } catch (error) {
       const err = error as any;
-      // If the error is 'unavailable', it might be a transient network issue or proxy problem
-      if (err.code === 'unavailable') {
-        console.warn(`Firestore connection unavailable. Retrying... (${retries} left)`);
+      // If the error is 'unavailable' or 'deadline-exceeded', it might be a transient network issue or proxy problem
+      if (err.code === 'unavailable' || err.code === 'deadline-exceeded') {
+        console.warn(`Firestore connection ${err.code}. Retrying... (${retries} left)`);
         retries--;
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3s before retry
       } else if (err.message?.includes('the client is offline')) {
         console.error("Firestore Error: The client is offline. Please check your internet connection or Firebase configuration.");
         return;
+      } else if (err.code === 'permission-denied') {
+        // This is actually a good sign - it means we reached the server!
+        console.log("Firestore connection reached (Permission Denied is expected for test doc).");
+        sessionStorage.setItem('fs_connection_tested', 'true');
+        return;
       } else {
-        // Other errors might be permissions or config issues
+        // Other errors might be config issues
         console.error("Firestore connection test failed:", err.message);
         return;
       }
