@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Sparkles,
   Video,
+  Youtube,
   Layers,
   Phone,
   ChevronDown,
@@ -137,19 +138,19 @@ const ScrapbookDecorations = () => {
 // --- Profile Image Component ---
 const ProfileImage = () => {
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.8, ease: "anticipate" }}
-        className="w-full h-full"
+        className="w-full"
       >
         <motion.img 
           animate={{ y: [0, -10, 0] }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
           src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
           alt="Zeeshan" 
-          className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700 rounded-3xl"
+          className="w-full h-auto grayscale hover:grayscale-0 transition-all duration-700 rounded-3xl"
           referrerPolicy="no-referrer"
           loading="lazy"
         />
@@ -1127,60 +1128,75 @@ const Hero = () => {
   );
 };
 const About = () => (
-  <section id="about" className="section-padding px-6 max-w-7xl mx-auto">
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+  <section id="about" className="section-padding px-6 max-w-7xl mx-auto relative">
+    {/* Decorative Elements */}
+    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 blur-[100px] rounded-full -z-10" />
+    
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
       <motion.div
         initial={{ opacity: 0, x: -30 }}
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true }}
-        className="space-y-8"
+        className="space-y-10"
       >
         <div className="space-y-4">
-          <h3 className="text-blue-600 font-bold uppercase tracking-widest text-xs">The Designer</h3>
-          <h2 className="text-5xl md:text-6xl font-display font-bold leading-tight text-[#1A1A1A]">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2"
+          >
+            <div className="w-8 h-[1px] bg-blue-600" />
+            <span className="text-blue-600 font-bold uppercase tracking-[0.2em] text-[10px]">The Visionary</span>
+          </motion.div>
+          <h2 className="text-6xl md:text-7xl font-display font-bold leading-[0.9] text-[#1A1A1A] tracking-tighter">
             I'm Zeeshan, <br />
-            Architect of <span className="text-blue-600">Attention.</span>
+            Architect of <span className="text-blue-600 italic">Attention.</span>
           </h2>
         </div>
         
-        <div className="space-y-6 text-zinc-500 text-lg leading-relaxed font-medium">
-          <p>
+        <div className="space-y-6 text-zinc-500 text-lg leading-relaxed font-medium relative">
+          <p className="relative z-10">
             With over 5 years of experience in the creator economy, I've mastered the art of the 
             "Visual Hook." My work isn't just about aesthetics—it's about data-driven 
             psychology that forces a click. I don't just make thumbnails; I build gateways to your content.
           </p>
+          <div className="absolute -left-4 top-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-600/20 to-transparent" />
           <p>
             My philosophy is simple: Every pixel must serve a purpose. Whether it's the subtle glow on a subject's face or the precise placement of a text element, everything is engineered to maximize curiosity and drive the YouTube algorithm in your favor.
           </p>
         </div>
 
-        {/* Stats Box - Integrated Below Text */}
+        {/* Stats Box - Refined Brutalist Style */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.3 }}
-          className="p-8 bg-white text-black rounded-[2.5rem] border border-black/10 shadow-2xl"
+          className="relative"
         >
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neon-blue">Experience</span>
-              <div className="text-3xl font-display font-black">5+ YRS</div>
-            </div>
-            
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neon-blue">Avg CTR</span>
-              <div className="text-3xl font-display font-black"><Counter target={15} suffix="%" /></div>
-            </div>
+          <div className="absolute inset-0 bg-black translate-x-2 translate-y-2 rounded-3xl -z-10 opacity-5" />
+          <div className="p-10 bg-white text-black rounded-3xl border border-black/10 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-10 relative z-10">
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Experience</span>
+                <div className="text-4xl font-display font-black text-blue-600">5+<span className="text-lg ml-1">YRS</span></div>
+              </div>
+              
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Avg CTR</span>
+                <div className="text-4xl font-display font-black text-blue-600"><Counter target={15} suffix="%" /></div>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neon-purple">Projects</span>
-              <div className="text-3xl font-display font-black"><Counter target={200} suffix="+" /></div>
-            </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Projects</span>
+                <div className="text-4xl font-display font-black text-blue-600"><Counter target={200} suffix="+" /></div>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-neon-blue">Views</span>
-              <div className="text-3xl font-display font-black"><Counter target={400} suffix="K+" /></div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Views</span>
+                <div className="text-4xl font-display font-black text-blue-600"><Counter target={400} suffix="K+" /></div>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -1190,68 +1206,130 @@ const About = () => (
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.4 }}
+          className="flex items-center gap-6"
         >
           <Link 
             to="/about"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-transparent text-black border border-black/20 font-bold rounded-full hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all group"
+            className="inline-flex items-center gap-3 px-10 py-5 bg-black text-white font-bold rounded-full hover:bg-blue-600 transition-all group shadow-lg shadow-black/10"
           >
             Read Full Story
-            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </Link>
+          <div className="hidden sm:flex items-center gap-3 text-zinc-400">
+            <div className="w-10 h-[1px] bg-zinc-200" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Est. 2019</span>
+          </div>
         </motion.div>
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         whileInView={{ opacity: 1, scale: 1 }}
         viewport={{ once: true }}
-        className="relative group h-full"
+        className="relative group"
       >
-        <div className="absolute -inset-4 bg-gradient-to-r from-blue-600 to-purple-600 opacity-10 blur-2xl group-hover:opacity-20 transition-opacity" />
-        <div className="relative aspect-video rounded-3xl overflow-hidden bg-white border border-black/5 group-hover:border-black/10 transition-colors duration-500">
+        {/* Scrapbook Frame */}
+        <div className="absolute -inset-6 bg-zinc-50 border border-black/5 rounded-[3rem] -rotate-2 -z-10" />
+        <div className="absolute -inset-2 bg-white border border-black/10 rounded-[2.5rem] rotate-1 -z-10 shadow-xl" />
+        
+        <div className="relative rounded-[2rem] overflow-hidden bg-zinc-100 border border-black/5 group-hover:border-blue-600/20 transition-all duration-700 shadow-2xl">
           <ProfileImage />
           <FogEffect />
+          
+          {/* Thumbnail Style Overlays */}
+          <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors duration-700" />
+          
+          {/* Play Button Overlay */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 scale-150 group-hover:scale-100">
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/30 shadow-2xl">
+              <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-white border-b-[10px] border-b-transparent ml-1" />
+            </div>
+          </div>
+
+          {/* CTR Badge */}
+          <div className="absolute top-4 right-4 px-3 py-1 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-md shadow-lg transform rotate-2 group-hover:rotate-0 transition-transform">
+            15.2% CTR
+          </div>
+
+          {/* Overlay Tag */}
+          <div className="absolute bottom-6 left-6 right-6 p-4 bg-white/80 backdrop-blur-md rounded-2xl border border-white/20 shadow-lg transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Lead Designer</div>
+                <div className="text-sm font-display font-bold text-zinc-900">Zeeshan Z.</div>
+              </div>
+              <div className="flex -space-x-2">
+                {[1,2,3].map(i => (
+                  <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-zinc-200 overflow-hidden">
+                    <img src={`https://i.pravatar.cc/100?img=${i+10}`} alt="avatar" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Push Pin Decoration */}
+        <PushPin className="absolute -top-4 left-1/2 -translate-x-1/2 rotate-[-10deg] scale-125 z-20" color="#ef4444" />
       </motion.div>
     </div>
   </section>
 );
 
 const WhyMe = () => (
-  <section className="section-padding px-6 max-w-7xl mx-auto overflow-hidden">
+  <section className="section-padding px-6 max-w-7xl mx-auto overflow-hidden relative">
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-50/30 blur-[150px] rounded-full -z-10" />
+    
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
       <motion.div
         initial={{ opacity: 0, x: 50 }}
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true }}
-        className="order-2 lg:order-1 space-y-12"
+        className="order-2 lg:order-1 space-y-16"
       >
-        <div className="space-y-4">
-          <h3 className="text-neon-purple font-bold uppercase tracking-widest text-sm">Why Choose Me?</h3>
-          <h2 className="text-4xl md:text-5xl font-display font-bold">The Science Behind <br /><span className="text-gradient">The Click.</span></h2>
+        <div className="space-y-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-50 text-purple-600 text-[10px] font-bold uppercase tracking-widest border border-purple-100"
+          >
+            <Zap size={12} />
+            Why Choose Me?
+          </motion.div>
+          <h2 className="text-5xl md:text-6xl font-display font-bold leading-[0.9] tracking-tighter">
+            The Science Behind <br />
+            <span className="text-blue-600 italic">The Click.</span>
+          </h2>
+          <p className="text-zinc-500 text-lg font-medium max-w-xl">
+            I combine psychological triggers with data-driven design to ensure your content doesn't just look good—it performs.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {[
             { 
               icon: Target, 
               title: "Psychological Engineering", 
-              desc: "I don't just design; I engineer clicks using advanced color theory and visual hierarchy that triggers instant curiosity.",
+              desc: "I engineer clicks using advanced color theory and visual hierarchy that triggers instant curiosity.",
+              color: "blue"
             },
             { 
               icon: Cpu, 
               title: "Data-Driven Results", 
-              desc: "Every pixel is backed by CTR analysis and audience behavior research to ensure your content gets the attention it deserves.",
+              desc: "Every pixel is backed by CTR analysis and audience behavior research to ensure maximum reach.",
+              color: "purple"
             },
             { 
               icon: Zap, 
               title: "Viral Consistency", 
-              desc: "My designs have helped creators cross the 100K+ view milestone repeatedly by staying ahead of the YouTube algorithm.",
+              desc: "My designs have helped creators cross the 100K+ view milestone repeatedly by staying ahead of trends.",
+              color: "orange"
             },
             { 
               icon: Sparkles, 
               title: "Algorithm Mastery", 
-              desc: "I specialize in 'Pattern Interrupt' designs that break the viewer's scroll and force them to engage with your video.",
+              desc: "I specialize in 'Pattern Interrupt' designs that break the scroll and force engagement.",
+              color: "blue"
             }
           ].map((item, i) => (
             <motion.div
@@ -1260,32 +1338,80 @@ const WhyMe = () => (
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="space-y-4 group"
+              className="group relative"
             >
-              <div className="p-3 rounded-xl bg-zinc-50 border border-black/5 w-fit group-hover:border-black/10 transition-all duration-500">
-                <item.icon size={20} className="text-zinc-900" />
+              <div className="space-y-4 relative z-10">
+                <div className={`p-4 rounded-2xl bg-white border border-black/5 w-fit group-hover:border-blue-600/20 group-hover:shadow-xl group-hover:shadow-blue-600/5 transition-all duration-500`}>
+                  <item.icon size={24} className="text-zinc-900 group-hover:text-blue-600 transition-colors" />
+                </div>
+                <h4 className="text-xl font-display font-bold text-zinc-900">{item.title}</h4>
+                <p className="text-zinc-500 text-sm leading-relaxed font-medium">{item.desc}</p>
               </div>
-              <h4 className="text-lg font-bold text-zinc-900">{item.title}</h4>
-              <p className="text-zinc-500 text-sm leading-relaxed font-light">{item.desc}</p>
+              {/* Hover Background Decoration */}
+              <div className="absolute -inset-4 bg-zinc-50 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity -z-10" />
             </motion.div>
           ))}
         </div>
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         whileInView={{ opacity: 1, scale: 1 }}
         viewport={{ once: true }}
-        className="order-1 lg:order-2 relative flex justify-center items-center"
+        className="order-1 lg:order-2 relative"
       >
-        <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/5 to-purple-600/5 blur-[100px] rounded-full" />
-        <div className="relative w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden border-4 border-white shadow-2xl z-10 hover:scale-105 transition-transform duration-500">
+        {/* Dynamic Background Elements */}
+        <div className="absolute -inset-10 bg-blue-50/30 blur-[100px] rounded-full -z-10" />
+        
+        <div className="relative w-full rounded-[2.5rem] overflow-hidden border-8 border-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] z-10 group cursor-none">
           <img 
             src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
             alt="Zeeshan Profile" 
-            className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
+            className="w-full h-auto grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000 ease-out"
             referrerPolicy="no-referrer"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-blue-600/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+          
+          {/* Thumbnail Elements */}
+          <div className="absolute top-4 left-4 px-3 py-1 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold rounded-md border border-white/10">
+            04:20
+          </div>
+
+          <div className="absolute bottom-4 right-4 px-3 py-1 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-md shadow-lg">
+            VIRAL
+          </div>
+
+          {/* Floating Badge */}
+          <motion.div 
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-1/4 -right-4 p-4 bg-white rounded-2xl shadow-2xl border border-black/5 z-20 hidden md:block"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Status</div>
+                <div className="text-xs font-display font-bold text-zinc-900">Available for Hire</div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Views Badge */}
+          <motion.div 
+            animate={{ y: [0, 10, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            className="absolute bottom-1/4 -left-4 p-4 bg-white rounded-2xl shadow-2xl border border-black/5 z-20 hidden md:block"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                <Youtube className="text-blue-600" size={16} />
+              </div>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Reach</div>
+                <div className="text-xs font-display font-bold text-zinc-900">500M+ Views</div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </motion.div>
     </div>

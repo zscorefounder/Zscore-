@@ -12,7 +12,10 @@ import {
   Sparkles,
   ChevronRight,
   AlertCircle,
-  Star
+  Star,
+  Search,
+  Copy,
+  Check
 } from 'lucide-react';
 import { PushPin } from './PushPin';
 import { ZSpinner, ZSkeleton } from './ZLoading';
@@ -121,7 +124,16 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const pinColors = ["#FF6321", "#3B82F6", "#8B5CF6", "#10B981"];
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(thumb.imageUrl);
+    setIsCopied(true);
+    toast.success('Image link copied!');
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   return (
     <motion.div
@@ -189,31 +201,40 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
             loading="lazy"
           />
           
-          {isAdmin && (
-            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-30">
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRefine(thumb.id, thumb.imageUrl);
-                }}
-                disabled={refiningId === thumb.id}
-                className="p-2.5 bg-white/90 backdrop-blur-md text-blue-600 rounded-xl hover:bg-white transition-all shadow-lg disabled:opacity-50"
-                title="Refine with AI"
-              >
-                {refiningId === thumb.id ? <ZSpinner size={16} /> : <Sparkles size={16} />}
-              </button>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(thumb.id);
-                }}
-                className="p-2.5 bg-white/90 backdrop-blur-md text-red-500 rounded-xl hover:bg-white transition-all shadow-lg"
-                title="Delete Thumbnail"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          )}
+          <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-30">
+            <button 
+              onClick={handleCopy}
+              className="p-2.5 bg-white/90 backdrop-blur-md text-zinc-600 rounded-xl hover:bg-white transition-all shadow-lg"
+              title="Copy Image Link"
+            >
+              {isCopied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+            </button>
+            {isAdmin && (
+              <>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRefine(thumb.id, thumb.imageUrl);
+                  }}
+                  disabled={refiningId === thumb.id}
+                  className="p-2.5 bg-white/90 backdrop-blur-md text-blue-600 rounded-xl hover:bg-white transition-all shadow-lg disabled:opacity-50"
+                  title="Refine with AI"
+                >
+                  {refiningId === thumb.id ? <ZSpinner size={16} /> : <Sparkles size={16} />}
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(thumb.id);
+                  }}
+                  className="p-2.5 bg-white/90 backdrop-blur-md text-red-500 rounded-xl hover:bg-white transition-all shadow-lg"
+                  title="Delete Thumbnail"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -248,6 +269,7 @@ export const ThumbnailGallery = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
@@ -588,9 +610,19 @@ export const ThumbnailGallery = () => {
   };
 
   const filteredThumbnails = useMemo(() => {
-    if (activeFilter === 'All') return thumbnails;
-    return thumbnails.filter(t => t.category === activeFilter);
-  }, [thumbnails, activeFilter]);
+    let filtered = thumbnails;
+    if (activeFilter !== 'All') {
+      filtered = filtered.filter(t => t.category === activeFilter);
+    }
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(t => 
+        t.title.toLowerCase().includes(query) || 
+        t.category?.toLowerCase().includes(query)
+      );
+    }
+    return filtered;
+  }, [thumbnails, activeFilter, searchQuery]);
 
   return (
     <section className="mt-20">
@@ -855,21 +887,48 @@ export const ThumbnailGallery = () => {
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
       />
 
-      {/* Category Filters */}
-      <div className="flex flex-wrap gap-2 mb-12 justify-center">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveFilter(cat)}
-            className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-              activeFilter === cat 
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-                : 'bg-white text-zinc-500 hover:bg-zinc-100 border border-black/5'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* Search and Filters */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-12">
+        <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveFilter(cat)}
+              className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all relative ${
+                activeFilter === cat 
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                  : 'bg-white text-zinc-500 hover:bg-zinc-100 border border-black/5'
+              }`}
+            >
+              {cat}
+              {activeFilter === cat && (
+                <motion.div 
+                  layoutId="activeFilter"
+                  className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full border border-white"
+                />
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+          <input 
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search projects..."
+            className="w-full bg-white border border-black/5 rounded-full py-3 pl-12 pr-6 focus:outline-none focus:border-blue-600/30 transition-all text-xs font-bold uppercase tracking-widest placeholder:text-zinc-300 shadow-sm"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {loading && thumbnails.length === 0 ? (

@@ -82,11 +82,7 @@ const PERSONAL_INFO = {
     { label: "Avg. CTR Increase", value: 15, suffix: "%" },
     { label: "Happy Clients", value: 200, suffix: "+" }
   ],
-  workspace: [
-    { url: "https://picsum.photos/seed/workspace1/800/600", caption: "Where the magic happens" },
-    { url: "https://picsum.photos/seed/workspace2/800/600", caption: "Late night sessions" },
-    { url: "https://picsum.photos/seed/workspace3/800/600", caption: "The setup" }
-  ]
+  workspace: []
 };
 // --- EDITABLE CONTENT END ---
 
@@ -602,10 +598,10 @@ const AboutPage = () => {
                       className="w-full h-auto grayscale hover:grayscale-0 transition-all duration-700 group-hover:scale-105" 
                       referrerPolicy="no-referrer"
                     />
-                    {isAdmin && img.id && (
+                    {img.id && (
                       <button 
                         onClick={() => handleDeleteImage(img.id)}
-                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-40"
                       >
                         <Trash2 size={14} />
                       </button>
