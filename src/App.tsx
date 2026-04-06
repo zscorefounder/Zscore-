@@ -4,6 +4,7 @@
  */
 
 import { motion, useScroll, useTransform, AnimatePresence, useInView, useMotionValue, useSpring } from 'motion/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Helmet } from 'react-helmet-async';
 import { 
   User, 
@@ -2498,6 +2499,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Toaster position="top-center" richColors />
+      <SpeedInsights />
       <Helmet>
         <title>Z Score | YouTube Thumbnail Design & Growth Expert</title>
         <meta name="description" content="Z Score helps top creators like MrBeast, Azul Welz, and Hustle Ninjas scale their channels with high-performance thumbnail designs and psychological visual hooks." />
