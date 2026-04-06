@@ -192,5 +192,9 @@ service cloud.firestore {
     match /test/connection {
       allow read: if true;
     }
+
+    match /_connection_test_/{docId} {
+      allow read: if true;
+    }
   }
 }

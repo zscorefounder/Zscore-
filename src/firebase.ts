@@ -21,18 +21,18 @@ import { toast } from 'sonner';
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with long polling and offline persistence to avoid WebSocket/proxy issues
+// Initialize Firestore with long polling to avoid WebSocket/proxy issues in sandboxed environments
 const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
 console.log(`Initializing Firestore with database ID: ${dbId}`);
 const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
+  experimentalAutoDetectLongPolling: true,
+}, dbId);
 
 // Enable offline persistence if possible
 try {
-  // Note: enableIndexedDbPersistence is deprecated in newer SDKs, 
-  // but we can rely on the default persistence or use the newer persistence APIs if needed.
-  // For now, we'll stick to the basic initialization which is robust in this environment.
+  // Persistence is handled automatically in newer SDKs or can be configured via settings.
+  // We'll rely on the default behavior for now.
 } catch (err) {
   console.warn("Firestore persistence could not be enabled:", err);
 }
@@ -48,39 +48,33 @@ async function testConnection() {
   let retries = 3;
   while (retries > 0) {
     try {
-      const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
-      console.log(`Testing Firestore connection with database ID: ${dbId} (Retries left: ${retries})`);
-      
-      // Attempt a simple read to verify connection
-      await getDocFromServer(doc(db, 'test', 'connection'));
-      
+      // Use getDocFromServer to bypass local cache and force a network request
+      await getDocFromServer(doc(db, '_connection_test_', 'ping'));
       console.log("Firestore connection successful.");
       sessionStorage.setItem('fs_connection_tested', 'true');
-      break;
+      return;
     } catch (error) {
-      if (error instanceof Error) {
-        const msg = error.message.toLowerCase();
-        
-        // If it's a permission denied or quota error, we ARE connected
-        if (msg.includes('permission-denied') || msg.includes('insufficient permissions') || 
-            msg.includes('quota-exceeded') || msg.includes('resource-exhausted') || msg.includes('quota exceeded')) {
-          console.log("Firestore connection established (Access or quota restricted).");
-          sessionStorage.setItem('fs_connection_tested', 'true');
-          break;
-        }
-
-        console.warn(`Firestore connection attempt failed: ${error.message}`);
+      const err = error as any;
+      // If the error is 'unavailable', it might be a transient network issue or proxy problem
+      if (err.code === 'unavailable') {
+        console.warn(`Firestore connection unavailable. Retrying... (${retries} left)`);
         retries--;
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
-        } else {
-          console.error("Firestore is offline or unreachable after multiple attempts.");
-        }
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+      } else if (err.message?.includes('the client is offline')) {
+        console.error("Firestore Error: The client is offline. Please check your internet connection or Firebase configuration.");
+        return;
       } else {
-        retries = 0;
+        // Other errors might be permissions or config issues
+        console.error("Firestore connection test failed:", err.message);
+        return;
       }
     }
   }
+  console.error("Firestore connection could not be established after multiple retries.");
+  toast.error("Could not reach the database. Please check your internet connection or refresh the page.", {
+    description: "Firestore is currently unavailable.",
+    duration: 10000,
+  });
 }
 testConnection();
 
