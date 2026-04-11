@@ -15,7 +15,8 @@ import {
   Star,
   Search,
   Copy,
-  Check
+  Check,
+  RefreshCw
 } from 'lucide-react';
 import { PushPin } from './PushPin';
 import { ZSpinner, ZSkeleton } from './ZLoading';
@@ -51,24 +52,27 @@ interface Thumbnail {
 }
 
 const CATEGORIES = ['All', 'Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'];
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 20;
 
 const ThumbnailSkeleton = () => (
-  <div className="w-full md:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-2rem)] max-w-sm bg-white shadow-[0_10px_40px_rgba(0,0,0,0.04)] rounded-3xl p-6 space-y-6 border border-black/[0.02]">
-    <ZSkeleton className="aspect-video rounded-2xl" />
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <ZSkeleton className="h-6 w-8 rounded-lg" />
-        <div className="flex gap-1">
-          {[...Array(5)].map((_, i) => (
-            <ZSkeleton key={i} className="w-3 h-3 rounded-full" />
-          ))}
-        </div>
+  <div className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-2rem)] lg:w-[calc(50%-2.5rem)] max-w-lg mx-auto border border-black/[0.02] space-y-6">
+    <div className="absolute top-6 left-1/2 -translate-x-1/2">
+      <ZSkeleton className="w-4 h-4 rounded-full" />
+    </div>
+    <div className="flex items-center justify-between">
+      <ZSkeleton className="h-8 w-12 rounded-lg" />
+      <div className="flex gap-1">
+        {[...Array(5)].map((_, i) => (
+          <ZSkeleton key={i} className="w-3 h-3 rounded-full" />
+        ))}
       </div>
-      <ZSkeleton className="h-6 w-3/4 rounded-lg" />
+    </div>
+    <ZSkeleton className="aspect-video rounded-2xl" />
+    <div className="space-y-4">
+      <ZSkeleton className="h-8 w-3/4 rounded-lg" />
       <div className="flex items-center justify-between pt-2">
-        <ZSkeleton className="h-3 w-1/4 rounded-full" />
-        <ZSkeleton className="h-3 w-1/6 rounded-full" />
+        <ZSkeleton className="h-4 w-1/4 rounded-full" />
+        <ZSkeleton className="h-5 w-1/6 rounded-full" />
       </div>
     </div>
   </div>
@@ -153,7 +157,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
       }}
       viewport={{ once: true, margin: "-50px" }}
       transition={{ delay: i * 0.1, duration: 0.5, ease: "easeOut" }}
-      className="relative p-8 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-2rem)] max-w-sm mx-auto group hover:z-30 transition-all cursor-default"
+      className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-2rem)] lg:w-[calc(50%-2.5rem)] max-w-lg mx-auto group hover:z-30 transition-all cursor-default"
     >
       <PushPin color={pinColors[i % pinColors.length]} />
       
@@ -176,9 +180,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
 
         <div className="aspect-video overflow-hidden relative bg-zinc-100 rounded-2xl border border-black/[0.03]">
           {!isLoaded && !hasError && (
-            <div className="absolute inset-0 bg-zinc-200 animate-pulse flex items-center justify-center">
-              <ImageIcon className="text-zinc-300" size={24} />
-            </div>
+            <ZSkeleton className="absolute inset-0 rounded-2xl" />
           )}
           {hasError && (
             <div className="absolute inset-0 bg-zinc-100 flex flex-col items-center justify-center p-4 text-center">
@@ -293,7 +295,10 @@ export const ThumbnailGallery = () => {
   const [image, setImage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchThumbnails(true, true);
+    const timer = setTimeout(() => {
+      fetchThumbnails(true, false); // Use cache by default (force = false)
+    }, 500); // Small delay to let connection stabilize
+    return () => clearTimeout(timer);
   }, [activeFilter]);
 
   const [error, setError] = useState<string | null>(null);
@@ -362,9 +367,15 @@ export const ThumbnailGallery = () => {
       console.error("Error fetching thumbnails:", err);
       if (err instanceof Error) {
         const msg = err.message.toLowerCase();
-        if (msg.includes('quota-exceeded') || msg.includes('resource-exhausted') || msg.includes('quota exceeded')) {
+        const isQuotaOrNetwork = msg.includes('quota-exceeded') || 
+                                msg.includes('resource-exhausted') || 
+                                msg.includes('quota exceeded') || 
+                                msg.includes('network-request-failed') ||
+                                msg.includes('could not reach cloud firestore');
+        
+        if (isQuotaOrNetwork) {
           setQuotaExceeded(true);
-          toast.error("Daily limit reached. Some thumbnails might be missing.");
+          toast.error("Network issue or limit reached. Using offline data.");
         } else if (msg.includes('index') || msg.includes('composite')) {
           setError("Database index required. Please contact admin.");
           console.error("Firestore Index Error. You may need to create a composite index for category + createdAt.");
@@ -571,7 +582,7 @@ export const ThumbnailGallery = () => {
       setThumbnails(prev => [newThumb, ...prev]);
       
       // Clear cache so next fetch gets fresh data
-      clearCache('thumbnails_v2_');
+      clearCache('thumbnails_v3_');
       
       setTitle('');
       setStats('');
@@ -601,7 +612,7 @@ export const ThumbnailGallery = () => {
           setThumbnails(prev => prev.filter(t => t.id !== id));
           
           // Clear cache
-          clearCache('thumbnails_v2_');
+          clearCache('thumbnails_v3_');
           
           toast.success('Thumbnail deleted', { id: toastId });
         } catch (err) {
@@ -633,13 +644,19 @@ export const ThumbnailGallery = () => {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-4">
             <h2 className="text-3xl font-bold tracking-tight">Live <span className="text-blue-600">Thumbnails</span></h2>
+            {quotaExceeded && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[10px] font-bold uppercase tracking-widest animate-pulse">
+                <AlertCircle size={12} />
+                Offline Mode
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <button 
                 onClick={() => fetchThumbnails(true, true)}
-                className="p-2 bg-zinc-100 text-zinc-600 rounded-full hover:bg-zinc-200 transition-all"
+                className={`p-2 bg-zinc-100 text-zinc-600 rounded-full hover:bg-zinc-200 transition-all ${loading ? 'animate-spin' : ''}`}
                 title="Refresh Gallery"
               >
-                <ZSpinner size={16} />
+                <RefreshCw size={16} />
               </button>
               {isAdmin && (
                 <>
@@ -693,7 +710,7 @@ export const ThumbnailGallery = () => {
                         };
                         setThumbnails(prev => [newThumb, ...prev]);
                         
-                        clearCache('thumbnails_v2_');
+                        clearCache('thumbnails_v3_');
                         toast.success('Placeholder added!', { id: toastId });
                       } catch (e) {
                         toast.error('Failed to add placeholder', { id: toastId });
@@ -711,7 +728,7 @@ export const ThumbnailGallery = () => {
             </div>
           </div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-            Note: Thumbnails thora loading main time lete hain.
+            Note: High-quality thumbnails may take a moment to load.
           </p>
         </div>
         
@@ -803,7 +820,7 @@ export const ThumbnailGallery = () => {
                     </label>
                     {image && (
                       <div className="w-32 h-32 rounded-2xl overflow-hidden border border-black/5 relative group">
-                        <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={image} alt="Preview" className="w-full h-full object-cover" loading="lazy" />
                         <button 
                           type="button"
                           onClick={() => setImage(null)}

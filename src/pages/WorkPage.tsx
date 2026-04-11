@@ -166,6 +166,7 @@ const Reviews = () => (
                     alt={review.name}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
+                    loading="lazy"
                   />
                 </div>
                 <div>
@@ -236,6 +237,7 @@ const TrustedClients = () => (
                   alt={client.name}
                   className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
               </div>
               <div className="text-center">
@@ -449,7 +451,7 @@ const HeroSection = () => {
               <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </button>
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-              Note: Thumbnails thora loading main time lete hain.
+              Note: Thumbnails may take a moment to load.
             </p>
 
             {/* Quota Exceeded Overlay */}
@@ -594,7 +596,7 @@ const HeroSection = () => {
                     position: 'absolute',
                     zIndex: 10 + i,
                   }}
-                  className="w-40 md:w-64 group"
+                  className="w-48 md:w-80 group"
                 >
                   <div className="relative overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-white/20 transform transition-all duration-700 hover:scale-110 hover:-translate-y-12 hover:z-50 hover:shadow-[0_40px_80px_rgba(0,0,0,0.25)]">
                     {isAdmin && (
@@ -754,7 +756,7 @@ const HangingSection = () => {
           contents: [
             {
               parts: [
-                { text: "Analyze this image and provide a short, catchy title (1-3 words) and a very brief description (under 10 words) suitable for a polaroid-style card. Return in JSON format with 'title' and 'desc' keys." },
+                { text: "Analyze this image and provide a short, catchy, high-conversion title (1-3 words) and a very brief, punchy description (under 10 words) suitable for a polaroid-style project card. The tone should be professional yet creative. Return in JSON format with 'title' and 'desc' keys." },
                 { inlineData: { data: base64Content, mimeType: file.type } }
               ]
             }
@@ -900,7 +902,7 @@ const HangingSection = () => {
           </h2>
           <p className="text-zinc-500 max-w-2xl mx-auto text-sm mb-2">A collection of visuals designed to break the pattern and drive engagement.</p>
           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-8">
-            Note: Thumbnails thora loading main time lete hain.
+            Note: Thumbnails may take a moment to load.
           </p>
 
           {/* Quota Exceeded Overlay */}
@@ -1235,7 +1237,7 @@ const WorkPage = () => {
         </Link>
         <div className="flex items-center gap-4">
           <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Visual/Graphic Designer</span>
-          <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-6 w-auto brightness-0" referrerPolicy="no-referrer" />
+          <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-6 w-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
         </div>
       </nav>
 
@@ -1280,6 +1282,7 @@ const WorkPage = () => {
               alt="Profile" 
               className="absolute inset-0 w-full h-full object-cover transition-all duration-1000 group-hover:scale-110"
               referrerPolicy="no-referrer"
+              loading="lazy"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-700" />
             <div className="absolute bottom-8 left-8 right-8 text-white transform transition-transform duration-700 group-hover:translate-y-[-10px]">

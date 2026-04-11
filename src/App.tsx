@@ -433,6 +433,7 @@ const AIChat = () => {
                     alt="Z Score Logo" 
                     className="w-full h-full object-contain brightness-0" 
                     referrerPolicy="no-referrer" 
+                    loading="lazy"
                   />
                 </div>
                 <div>
@@ -715,15 +716,17 @@ const CustomCursor = () => {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   
-  const springConfig = { damping: 20, stiffness: 250, mass: 0.5 };
+  const springConfig = { damping: 25, stiffness: 300, mass: 0.5 };
   const springX = useSpring(mouseX, springConfig);
   const springY = useSpring(mouseY, springConfig);
   
-  const dotSpringConfig = { damping: 30, stiffness: 400, mass: 0.1 };
+  const dotSpringConfig = { damping: 40, stiffness: 500, mass: 0.1 };
   const dotSpringX = useSpring(mouseX, dotSpringConfig);
   const dotSpringY = useSpring(mouseY, dotSpringConfig);
 
   const [isHovering, setIsHovering] = useState(false);
+  const [isClicking, setIsClicking] = useState(false);
+  const [cursorType, setCursorType] = useState<'default' | 'pointer' | 'text'>('default');
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -733,25 +736,52 @@ const CustomCursor = () => {
 
     const handleMouseOver = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'BUTTON' || target.tagName === 'A' || target.closest('button') || target.closest('a')) {
+      const isPointer = 
+        target.tagName === 'BUTTON' || 
+        target.tagName === 'A' || 
+        target.closest('button') || 
+        target.closest('a') ||
+        target.classList.contains('cursor-pointer') ||
+        target.closest('.cursor-pointer');
+      
+      const isText = 
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable;
+
+      if (isPointer) {
         setIsHovering(true);
+        setCursorType('pointer');
+      } else if (isText) {
+        setIsHovering(true);
+        setCursorType('text');
       } else {
         setIsHovering(false);
+        setCursorType('default');
       }
     };
 
+    const handleMouseDown = () => setIsClicking(true);
+    const handleMouseUp = () => setIsClicking(false);
+
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseover', handleMouseOver);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+    
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseover', handleMouseOver);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [mouseX, mouseY]);
 
   return (
     <>
+      {/* Outer Ring */}
       <motion.div
-        className="fixed top-0 left-0 w-8 h-8 rounded-full border border-neon-blue pointer-events-none z-[9999] hidden md:block"
+        className="fixed top-0 left-0 pointer-events-none z-[9999] hidden md:block mix-blend-difference"
         style={{
           x: springX,
           y: springY,
@@ -759,20 +789,51 @@ const CustomCursor = () => {
           translateY: '-50%',
         }}
         animate={{
-          scale: isHovering ? 1.5 : 1,
-          backgroundColor: isHovering ? 'rgba(0, 112, 243, 0.05)' : 'transparent',
+          width: isClicking ? 40 : (isHovering ? 80 : 32),
+          height: isClicking ? 40 : (isHovering ? 80 : 32),
+          backgroundColor: isHovering ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0)',
+          border: isHovering ? '1px solid rgba(255, 255, 255, 0.5)' : '1px solid rgba(255, 255, 255, 0.3)',
+          borderRadius: cursorType === 'text' ? '4px' : '50%',
         }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
       />
+      
+      {/* Inner Dot */}
       <motion.div
-        className="fixed top-0 left-0 w-1.5 h-1.5 bg-neon-blue rounded-full pointer-events-none z-[9999] hidden md:block"
+        className="fixed top-0 left-0 w-1.5 h-1.5 bg-white rounded-full pointer-events-none z-[9999] hidden md:block mix-blend-difference"
         style={{
           x: dotSpringX,
           y: dotSpringY,
           translateX: '-50%',
           translateY: '-50%',
         }}
+        animate={{
+          scale: isClicking ? 2 : (isHovering ? 0 : 1),
+          opacity: isHovering && cursorType === 'pointer' ? 0 : 1
+        }}
       />
+
+      {/* Hover Text / Icon */}
+      <AnimatePresence>
+        {isHovering && cursorType === 'pointer' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            className="fixed top-0 left-0 pointer-events-none z-[9999] hidden md:flex items-center justify-center"
+            style={{
+              x: springX,
+              y: springY,
+              translateX: '-50%',
+              translateY: '-50%',
+            }}
+          >
+            <div className="text-[8px] font-black uppercase tracking-widest text-white mix-blend-difference">
+              View
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 };
@@ -831,7 +892,7 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
   return (
     <nav className="fixed top-0 left-0 w-full z-50 px-6 py-6 flex justify-between items-center bg-white/80 backdrop-blur-xl border-b border-black/5">
       <Link to="/" className="flex items-center gap-2 cursor-pointer group">
-        <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-8 w-auto group-hover:scale-110 transition-transform duration-300 brightness-0" referrerPolicy="no-referrer" />
+        <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-8 w-auto group-hover:scale-110 transition-transform duration-300 brightness-0" referrerPolicy="no-referrer" loading="lazy" />
       </Link>
       
       {/* Desktop Nav */}
@@ -1052,7 +1113,7 @@ const Hero = () => {
           transition={{ delay: 0.6, duration: 1 }}
           className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-12"
         >
-          Note: Thumbnails thora loading main time lete hain.
+          Note: Thumbnails may take a moment to load.
         </motion.p>
         
         <motion.div 
@@ -1261,7 +1322,7 @@ const About = () => (
               <div className="flex -space-x-2">
                 {[1,2,3].map(i => (
                   <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-zinc-200 overflow-hidden">
-                    <img src={`https://i.pravatar.cc/100?img=${i+10}`} alt="avatar" className="w-full h-full object-cover" />
+                    <img src={`https://i.pravatar.cc/100?img=${i+10}`} alt="avatar" className="w-full h-full object-cover" loading="lazy" />
                   </div>
                 ))}
               </div>
@@ -1369,6 +1430,7 @@ const WhyMe = () => (
             alt="Zeeshan Profile" 
             className="w-full h-auto grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000 ease-out"
             referrerPolicy="no-referrer"
+            loading="lazy"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-blue-600/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
           
@@ -2113,7 +2175,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" />
+                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Instagram size={16} className="text-purple-600" />
@@ -2161,7 +2223,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" />
+                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Video size={16} className="text-black" />
@@ -2209,7 +2271,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" />
+                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Palette size={16} className="text-blue-600" />
@@ -2257,7 +2319,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" />
+                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Twitter size={16} className="text-black" />
@@ -2302,7 +2364,7 @@ const Footer = () => (
   <footer className="py-12 px-6 border-t border-black/5">
     <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
       <div className="flex items-center gap-2">
-        <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-8 w-auto brightness-0" referrerPolicy="no-referrer" />
+        <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-8 w-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
       </div>
       
       <p className="text-zinc-500 text-xs uppercase tracking-widest">
@@ -2366,6 +2428,7 @@ const LoadingScreen = ({ progress }: { progress: number }) => {
               alt="Z Score Logo" 
               className="h-20 w-auto brightness-0" 
               referrerPolicy="no-referrer" 
+              loading="lazy"
             />
           </motion.div>
           

@@ -26,6 +26,7 @@ const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
 console.log(`Initializing Firestore with database ID: ${dbId}`);
 const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: false,
   ignoreUndefinedProperties: true,
 }, dbId);
 
@@ -59,9 +60,9 @@ async function testConnection() {
       if (err.code === 'unavailable' || err.code === 'deadline-exceeded') {
         console.warn(`Firestore connection ${err.code}. Retrying... (${retries} left)`);
         retries--;
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3s before retry
-      } else if (err.message?.includes('the client is offline')) {
-        console.error("Firestore Error: The client is offline. Please check your internet connection or Firebase configuration.");
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s before retry (increased from 3s)
+      } else if (err.message?.includes('the client is offline') || err.code === 'auth/network-request-failed') {
+        console.error("Firestore Error: Network request failed or client is offline. Please check your internet connection.");
         return;
       } else if (err.code === 'permission-denied') {
         // This is actually a good sign - it means we reached the server!
@@ -113,6 +114,9 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const err = error as any;
+  const isNetworkError = err.code === 'unavailable' || err.code === 'deadline-exceeded' || err.code === 'auth/network-request-failed';
+  
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -139,8 +143,8 @@ export { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, limit,
 
 // Simple in-memory cache to reduce reads during the same session
 const firestoreCache = new Map<string, { data: any[], timestamp: number }>();
-const CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days for persistent cache
-const REFRESH_THRESHOLD = 1000 * 60 * 15; // 15 minutes threshold for background refresh
+const CACHE_TTL = 1000 * 60 * 60 * 24 * 30; // 30 days for persistent cache
+const REFRESH_THRESHOLD = 1000 * 60 * 60 * 2; // 2 hours threshold for background refresh (increased from 15m)
 
 export function clearCache(cacheKeyPrefix?: string) {
   if (cacheKeyPrefix) {
@@ -244,6 +248,16 @@ export async function getDocsCached(q: any, cacheKey: string, force = false) {
 
     // 3. Fetch from Firestore if not cached or expired
     try {
+      // If we have local data but it's just past REFRESH_THRESHOLD, 
+      // we can still return it and refresh in background to save user wait time
+      if (localData) {
+        console.log(`Using local cache for ${cacheKey}, refreshing in background...`);
+        fetchAndCache(q, cacheKey).catch(err => {
+          console.warn(`Background refresh failed for ${cacheKey}`, err);
+        });
+        return localData;
+      }
+
       return await fetchAndCache(q, cacheKey);
     } catch (error) {
       // If quota exceeded or offline, return ANY cached data as last resort

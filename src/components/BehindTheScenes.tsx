@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, X, Upload, Loader2, Image as ImageIcon, Send, Sparkles, ChevronRight, ChevronLeft, Layout, Workflow, FileText, ExternalLink, Wand2, MessageSquare, User, Quote, Star, CheckCircle2, CheckCheck, Video, Phone } from 'lucide-react';
+import { Plus, Trash2, X, Upload, Loader2, Image as ImageIcon, Send, Sparkles, ChevronRight, ChevronLeft, Layout, Workflow, FileText, ExternalLink, Wand2, MessageSquare, User, Quote, Star, CheckCircle2, CheckCheck, Video, Phone, Mic } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { ZSpinner, ZSkeleton } from './ZLoading';
@@ -34,8 +34,10 @@ interface BTSContent {
   designWorkflow?: string;
   caseStudy?: string;
   clientFeedback?: string;
-  whatsappChat?: { role: 'client' | 'designer'; text: string; time: string }[];
+  whatsappChat?: { role: 'client' | 'designer'; text: string; time: string; isVoice?: boolean; duration?: string }[];
   imageUrl: string;
+  clientName?: string;
+  clientPhoto?: string;
   beforeImages?: string[];
   afterImages?: string[];
   createdAt: Timestamp;
@@ -82,6 +84,51 @@ const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quali
   });
 };
 
+const BeforeAfterSlider = ({ before, after }: { before: string, after: string }) => {
+  const [sliderPos, setSliderPos] = useState(50);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const position = ((x - rect.left) / rect.width) * 100;
+    setSliderPos(Math.min(Math.max(position, 0), 100));
+  };
+
+  return (
+    <div 
+      ref={containerRef}
+      className="relative aspect-video rounded-[2.5rem] overflow-hidden cursor-ew-resize select-none border border-black/5 shadow-2xl"
+      onMouseMove={handleMove}
+      onTouchMove={handleMove}
+    >
+      <img src={after} className="absolute inset-0 w-full h-full object-cover" alt="After" />
+      <div 
+        className="absolute inset-0 w-full h-full overflow-hidden"
+        style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
+      >
+        <img src={before} className="absolute inset-0 w-full h-full object-cover" alt="Before" />
+      </div>
+      
+      {/* Slider Line */}
+      <div 
+        className="absolute inset-y-0 w-1 bg-white shadow-[0_0_10px_rgba(0,0,0,0.3)] z-10"
+        style={{ left: `${sliderPos}%` }}
+      >
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-xl flex items-center justify-center">
+          <ChevronLeft size={14} className="text-zinc-400" />
+          <ChevronRight size={14} className="text-zinc-400" />
+        </div>
+      </div>
+
+      {/* Labels */}
+      <div className="absolute bottom-6 left-6 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[8px] font-bold uppercase tracking-widest rounded-full">Before</div>
+      <div className="absolute bottom-6 right-6 px-3 py-1 bg-blue-600/80 backdrop-blur-md text-white text-[8px] font-bold uppercase tracking-widest rounded-full">After</div>
+    </div>
+  );
+};
+
 const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCurrentImageIndex }: { 
   content: BTSContent, 
   i: number, 
@@ -114,11 +161,12 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
         setSelectedContent(content);
         setCurrentImageIndex(0);
       }}
-      className="relative p-8 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-2rem)] max-w-sm mx-auto group hover:z-30 transition-all cursor-pointer"
+      className="relative p-8 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-1.5rem)] lg:w-[calc(33.333%-2rem)] max-w-sm mx-auto group hover:z-30 transition-all cursor-pointer border border-black/[0.02] hover:border-blue-600/20"
     >
       <PushPin color={pinColors[i % pinColors.length]} />
+      <div className="absolute inset-0 noise-bg rounded-xl opacity-[0.03]" />
       
-      <div className="space-y-6">
+      <div className="space-y-6 relative z-10">
         <div className="flex items-center justify-between">
           <motion.span 
             initial={{ opacity: 0 }}
@@ -184,11 +232,14 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
 
         {/* Before/After Preview */}
         {(content.beforeImages || content.afterImages) && (
-          <div className="grid grid-cols-2 gap-3 pt-2">
+          <div className="grid grid-cols-2 gap-3 pt-2 relative">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center z-10 border border-black/5">
+              <Sparkles size={10} className="text-blue-600" />
+            </div>
             {content.beforeImages && content.beforeImages.length > 0 && (
               <div className="space-y-1">
                 <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Before</span>
-                <div className="aspect-video rounded-lg overflow-hidden border border-black/5">
+                <div className="aspect-video rounded-lg overflow-hidden border border-black/5 grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700">
                   <img 
                     src={content.beforeImages[0]} 
                     className="w-full h-full object-cover" 
@@ -201,7 +252,7 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
             {content.afterImages && content.afterImages.length > 0 && (
               <div className="space-y-1">
                 <span className="text-[8px] font-bold uppercase tracking-widest text-blue-600">After</span>
-                <div className="aspect-video rounded-lg overflow-hidden border border-blue-600/20">
+                <div className="aspect-video rounded-lg overflow-hidden border border-blue-600/20 shadow-lg shadow-blue-600/5">
                   <img 
                     src={content.afterImages[0]} 
                     className="w-full h-full object-cover" 
@@ -227,6 +278,7 @@ export const BehindTheScenes = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedContent, setSelectedContent] = useState<BTSContent | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showComparison, setShowComparison] = useState(true);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -236,7 +288,9 @@ export const BehindTheScenes = () => {
   const [designWorkflow, setDesignWorkflow] = useState('');
   const [caseStudy, setCaseStudy] = useState('');
   const [clientFeedback, setClientFeedback] = useState('');
-  const [whatsappChat, setWhatsappChat] = useState<{ role: 'client' | 'designer'; text: string; time: string }[]>([]);
+  const [clientName, setClientName] = useState('');
+  const [clientPhoto, setClientPhoto] = useState<string | null>(null);
+  const [whatsappChat, setWhatsappChat] = useState<{ role: 'client' | 'designer'; text: string; time: string; isVoice?: boolean; duration?: string }[]>([]);
   const [image, setImage] = useState<string | null>(null);
   const [beforeImages, setBeforeImages] = useState<string[]>([]);
   const [afterImages, setAfterImages] = useState<string[]>([]);
@@ -373,24 +427,27 @@ export const BehindTheScenes = () => {
       
       const parts: any[] = [
         { text: `
-          Analyze the provided images (Before/After/Main) and generate a complete design case study.
-          Return the response in JSON format with the following fields:
-          - title: A short, catchy project title.
-          - videoTitle: A title for a YouTube video about this project.
-          - description: A detailed description of what was done.
-          - layoutIdea: The initial concept or layout idea.
-          - designWorkflow: A step-by-step design process.
-          - caseStudy: A full, professional case study in Markdown format.
-          - clientFeedback: A short, enthusiastic testimonial from the client.
-          - whatsappChat: An array of 4-5 messages simulating a WhatsApp conversation between the 'designer' and 'client' about the project. Each message should have:
-            - role: either 'client' or 'designer'
-            - text: the message content
-            - time: a simulated time (e.g., "10:45 AM")
+          Analyze the provided images (Before/After/Main) and generate a complete, high-quality design case study for a YouTube thumbnail portfolio.
           
-          The chat should feel natural and professional. The last message should be from the designer saying they are sending the final file.
+          Return the response in JSON format with the following fields:
+          - title: A short, catchy, high-conversion project title (max 40 chars).
+          - videoTitle: A realistic YouTube video title that this thumbnail would be for.
+          - description: A compelling 1-2 sentence summary of the project goals and results.
+          - layoutIdea: Explain the psychological triggers used in the layout (e.g., rule of thirds, focal points, color contrast).
+          - designWorkflow: A detailed 4-5 step breakdown of the technical process (e.g., color grading, masking, typography selection).
+          - caseStudy: A comprehensive case study in Markdown. Use headings (###), bold text, and bullet points. Include sections for "The Challenge", "The Solution", and "The Result".
+          - clientFeedback: A realistic, enthusiastic testimonial from a content creator.
+          - clientName: A realistic name for the client (e.g., "Alex Rivers", "TechVibe Studio").
+          - whatsappChat: An array of 5-6 messages simulating a real WhatsApp conversation. 
+            - Use natural language, emojis, and professional yet friendly tone.
+            - Include a message where the client asks for a small revision and the designer handles it perfectly.
+            - The last message must be the designer sending the final file.
+            - Randomly include one voice message (isVoice: true, duration: "0:15") from either client or designer.
+          
+          Tone: Professional, expert, and results-oriented.
           
           If only one image is provided, assume it's the final result and imagine the process.
-          If before/after are provided, focus on the transformation.
+          If before/after are provided, focus on the dramatic transformation.
         `}
       ];
 
@@ -439,6 +496,7 @@ export const BehindTheScenes = () => {
               designWorkflow: { type: Type.STRING },
               caseStudy: { type: Type.STRING },
               clientFeedback: { type: Type.STRING },
+              clientName: { type: Type.STRING },
               whatsappChat: {
                 type: Type.ARRAY,
                 items: {
@@ -446,13 +504,15 @@ export const BehindTheScenes = () => {
                   properties: {
                     role: { type: Type.STRING, enum: ['client', 'designer'] },
                     text: { type: Type.STRING },
-                    time: { type: Type.STRING }
+                    time: { type: Type.STRING },
+                    isVoice: { type: Type.BOOLEAN },
+                    duration: { type: Type.STRING }
                   },
                   required: ["role", "text", "time"]
                 }
               }
             },
-            required: ["title", "videoTitle", "description", "layoutIdea", "designWorkflow", "caseStudy", "clientFeedback", "whatsappChat"]
+            required: ["title", "videoTitle", "description", "layoutIdea", "designWorkflow", "caseStudy", "clientFeedback", "whatsappChat", "clientName"]
           }
         }
       });
@@ -466,6 +526,7 @@ export const BehindTheScenes = () => {
       if (result.designWorkflow) setDesignWorkflow(result.designWorkflow);
       if (result.caseStudy) setCaseStudy(result.caseStudy);
       if (result.clientFeedback) setClientFeedback(result.clientFeedback);
+      if (result.clientName) setClientName(result.clientName);
       if (result.whatsappChat) setWhatsappChat(result.whatsappChat);
       
     } catch (err) {
@@ -480,6 +541,19 @@ export const BehindTheScenes = () => {
     e.preventDefault();
     if (!image || !title) return;
 
+    // Check total size of images to avoid Firestore 1MB limit
+    const totalSize = (image?.length || 0) + 
+                     (beforeImages.reduce((acc, img) => acc + img.length, 0)) + 
+                     (afterImages.reduce((acc, img) => acc + img.length, 0));
+    
+    // Base64 is ~33% larger than binary. 1MB binary is ~1.33MB base64.
+    // We'll be conservative and limit to 1.2MB total base64.
+    if (totalSize > 1200000) {
+      setError('Total image size is too large. Please remove some images or use smaller ones.');
+      toast.error('Total image size exceeds limit');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     const toastId = toast.loading('Uploading case study...');
@@ -492,6 +566,8 @@ export const BehindTheScenes = () => {
         designWorkflow: designWorkflow || null,
         caseStudy: caseStudy || null,
         clientFeedback: clientFeedback || null,
+        clientName: clientName || null,
+        clientPhoto: clientPhoto || null,
         whatsappChat: whatsappChat.length > 0 ? whatsappChat : null,
         imageUrl: image,
         beforeImages: beforeImages.length > 0 ? beforeImages : null,
@@ -509,6 +585,8 @@ export const BehindTheScenes = () => {
         designWorkflow: designWorkflow || undefined,
         caseStudy: caseStudy || undefined,
         clientFeedback: clientFeedback || undefined,
+        clientName: clientName || undefined,
+        clientPhoto: clientPhoto || undefined,
         whatsappChat: whatsappChat.length > 0 ? whatsappChat : undefined,
         imageUrl: image,
         beforeImages: beforeImages.length > 0 ? beforeImages : undefined,
@@ -527,6 +605,8 @@ export const BehindTheScenes = () => {
       setDesignWorkflow('');
       setCaseStudy('');
       setClientFeedback('');
+      setClientName('');
+      setClientPhoto(null);
       setWhatsappChat([]);
       setImage(null);
       setBeforeImages([]);
@@ -632,13 +712,37 @@ export const BehindTheScenes = () => {
             {loading ? <ZSpinner size={20} /> : <Loader2 size={20} className="text-zinc-400 group-hover:text-blue-600 transition-colors" />}
           </button>
           {isAdmin && (
-            <button 
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-3 px-8 py-4 bg-black text-white font-bold rounded-2xl hover:bg-zinc-800 transition-all shadow-xl shadow-black/10 group"
-            >
-              <Plus size={20} className="group-hover:rotate-90 transition-transform duration-500" />
-              Add Case Study
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-3 px-8 py-4 bg-black text-white font-bold rounded-2xl hover:bg-zinc-800 transition-all shadow-xl shadow-black/10 group"
+              >
+                <Plus size={20} className="group-hover:rotate-90 transition-transform duration-500" />
+                Add Case Study
+              </button>
+              {showForm && (
+                <button 
+                  onClick={() => {
+                    setTitle('');
+                    setVideoTitle('');
+                    setDescription('');
+                    setLayoutIdea('');
+                    setDesignWorkflow('');
+                    setCaseStudy('');
+                    setClientFeedback('');
+                    setWhatsappChat([]);
+                    setImage(null);
+                    setBeforeImages([]);
+                    setAfterImages([]);
+                    setError(null);
+                  }}
+                  className="p-4 bg-white border border-red-100 rounded-2xl hover:bg-red-50 transition-all shadow-sm group text-red-400 hover:text-red-600"
+                  title="Clear Form"
+                >
+                  <Trash2 size={20} />
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -728,51 +832,73 @@ export const BehindTheScenes = () => {
               </button>
 
               {/* Left Side: Visuals */}
-              <div className="w-full md:w-1/2 bg-zinc-50 overflow-y-auto custom-scrollbar p-8 md:p-12 space-y-8">
-                <div className="space-y-6">
+              <div className="w-full md:w-1/2 bg-zinc-50 overflow-y-auto custom-scrollbar p-8 md:p-12 space-y-8 relative">
+                <div className="absolute inset-0 noise-bg opacity-[0.02] pointer-events-none" />
+                <div className="space-y-6 relative z-10">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-4 py-2 rounded-full">
-                      {carouselImages[currentImageIndex]?.label}
-                    </span>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => setShowComparison(false)}
+                        className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all ${!showComparison ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-zinc-400 hover:text-zinc-600'}`}
+                      >
+                        Gallery
+                      </button>
+                      {selectedContent.beforeImages && selectedContent.afterImages && (
+                        <button 
+                          onClick={() => setShowComparison(true)}
+                          className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all ${showComparison ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-zinc-400 hover:text-zinc-600'}`}
+                        >
+                          Comparison
+                        </button>
+                      )}
+                    </div>
                     <span className="text-[10px] font-bold text-zinc-400">
-                      {currentImageIndex + 1} / {carouselImages.length}
+                      {showComparison ? 'Interactive Slider' : `${currentImageIndex + 1} / ${carouselImages.length}`}
                     </span>
                   </div>
                   
-                  <div className="relative group/carousel aspect-video rounded-[2rem] overflow-hidden shadow-2xl shadow-blue-600/10 border border-black/5 bg-black">
-                    <AnimatePresence mode="wait">
-                      <motion.img
-                        key={currentImageIndex}
-                        src={carouselImages[currentImageIndex]?.url}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="w-full h-full object-contain"
-                        alt={carouselImages[currentImageIndex]?.label}
-                      />
-                    </AnimatePresence>
+                  {showComparison && selectedContent.beforeImages && selectedContent.afterImages ? (
+                    <BeforeAfterSlider 
+                      before={selectedContent.beforeImages[0]} 
+                      after={selectedContent.afterImages[0]} 
+                    />
+                  ) : (
+                    <div className="relative group/carousel aspect-video rounded-[2rem] overflow-hidden shadow-2xl shadow-blue-600/10 border border-black/5 bg-black">
+                      <AnimatePresence mode="wait">
+                        <motion.img
+                          key={currentImageIndex}
+                          src={carouselImages[currentImageIndex]?.url}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.3 }}
+                          className="w-full h-full object-contain"
+                          alt={carouselImages[currentImageIndex]?.label}
+                          loading="lazy"
+                        />
+                      </AnimatePresence>
 
-                    {carouselImages.length > 1 && (
-                      <>
-                        <button
-                          onClick={prevImage}
-                          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all opacity-0 group-hover/carousel:opacity-100"
-                        >
-                          <ChevronLeft className="w-6 h-6" />
-                        </button>
-                        <button
-                          onClick={nextImage}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all opacity-0 group-hover/carousel:opacity-100"
-                        >
-                          <ChevronRight className="w-6 h-6" />
-                        </button>
-                      </>
-                    )}
-                  </div>
+                      {carouselImages.length > 1 && (
+                        <>
+                          <button
+                            onClick={prevImage}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all opacity-0 group-hover/carousel:opacity-100"
+                          >
+                            <ChevronLeft className="w-6 h-6" />
+                          </button>
+                          <button
+                            onClick={nextImage}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all opacity-0 group-hover/carousel:opacity-100"
+                          >
+                            <ChevronRight className="w-6 h-6" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Carousel Thumbnails */}
-                  {carouselImages.length > 1 && (
+                  {!showComparison && carouselImages.length > 1 && (
                     <div className="flex gap-3 justify-center">
                       {carouselImages.map((img, idx) => (
                         <button
@@ -782,7 +908,7 @@ export const BehindTheScenes = () => {
                             currentImageIndex === idx ? 'border-blue-600 scale-110' : 'border-transparent opacity-50 hover:opacity-100'
                           }`}
                         >
-                          <img src={img.url} className="w-full h-full object-cover" alt={img.label} />
+                          <img src={img.url} className="w-full h-full object-cover" alt={img.label} loading="lazy" />
                         </button>
                       ))}
                     </div>
@@ -808,7 +934,7 @@ export const BehindTheScenes = () => {
                         <div className="grid grid-cols-2 gap-6">
                           {selectedContent.beforeImages.map((img, idx) => (
                             <div key={idx} className="aspect-video rounded-[2.5rem] overflow-hidden border border-black/5 shadow-xl shadow-black/5 hover:scale-[1.02] transition-transform duration-500">
-                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx + 1}`} />
+                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx + 1}`} loading="lazy" />
                             </div>
                           ))}
                         </div>
@@ -821,7 +947,7 @@ export const BehindTheScenes = () => {
                         <div className="grid grid-cols-2 gap-6">
                           {selectedContent.afterImages.map((img, idx) => (
                             <div key={idx} className="aspect-video rounded-[2.5rem] overflow-hidden border border-blue-600/10 shadow-2xl shadow-blue-600/5 hover:scale-[1.02] transition-transform duration-500">
-                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx + 1}`} />
+                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx + 1}`} loading="lazy" />
                             </div>
                           ))}
                         </div>
@@ -882,14 +1008,15 @@ export const BehindTheScenes = () => {
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center overflow-hidden border border-white/10">
                               <img 
-                                src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
+                                src={selectedContent.clientPhoto || "https://i.ibb.co/qXFY4XD/dposa-s.png"} 
                                 alt="Client" 
                                 className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
+                                loading="lazy"
                               />
                             </div>
                             <div>
-                              <div className="text-sm font-bold">Client (Verified)</div>
+                              <div className="text-sm font-bold">{selectedContent.clientName || "Client"} (Verified)</div>
                               <div className="text-[10px] opacity-70 flex items-center gap-1">
                                 <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
                                 online
@@ -904,7 +1031,7 @@ export const BehindTheScenes = () => {
                         </div>
                         {/* Chat Area */}
                         <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar bg-[#e5ddd5] relative">
-                          <div className="absolute inset-0 opacity-[0.06] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat" />
+                          <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat mix-blend-multiply" />
                           
                           {selectedContent.whatsappChat.map((msg, idx) => (
                             <motion.div
@@ -925,7 +1052,36 @@ export const BehindTheScenes = () => {
                                     : 'right-[-8px] bg-[#dcf8c6] [clip-path:polygon(0_0,100%_0,0_100%)]'
                                 }`} />
                                 
-                                <p className="text-sm leading-relaxed pr-12">{msg.text}</p>
+                                {msg.isVoice ? (
+                                  <div className="flex items-center gap-3 min-w-[220px] py-2">
+                                    <div className="relative">
+                                      <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-400 border border-black/5">
+                                        <Mic size={20} />
+                                      </div>
+                                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                                        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                                      </div>
+                                    </div>
+                                    <div className="flex-grow space-y-2">
+                                      <div className="flex items-end gap-0.5 h-6">
+                                        {[...Array(18)].map((_, i) => (
+                                          <motion.div 
+                                            key={i} 
+                                            animate={{ height: [4, Math.random() * 16 + 4, 4] }}
+                                            transition={{ repeat: Infinity, duration: 1 + Math.random(), delay: i * 0.05 }}
+                                            className={`w-0.5 rounded-full ${i < 6 ? 'bg-blue-500' : 'bg-zinc-300'}`} 
+                                          />
+                                        ))}
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-zinc-400 tracking-tighter">{msg.duration || "0:15"}</span>
+                                        <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest">Voice Note</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm leading-relaxed pr-12">{msg.text}</p>
+                                )}
                                 <div className="absolute bottom-1 right-2 flex items-center gap-1">
                                   <span className="text-[9px] text-zinc-400">{msg.time}</span>
                                   {msg.role === 'designer' && <CheckCheck size={12} className="text-blue-500" />}
@@ -948,6 +1104,7 @@ export const BehindTheScenes = () => {
                                   alt="Final Thumbnail" 
                                   className="w-full h-auto max-h-60 object-cover"
                                   referrerPolicy="no-referrer"
+                                  loading="lazy"
                                 />
                               </div>
                               <div className="px-2 pb-1 flex items-center justify-between gap-4">
@@ -981,11 +1138,15 @@ export const BehindTheScenes = () => {
                             "{selectedContent.clientFeedback}"
                           </p>
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                              <CheckCircle2 className="w-5 h-5" />
+                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center overflow-hidden border border-white/10">
+                              {selectedContent.clientPhoto ? (
+                                <img src={selectedContent.clientPhoto} alt={selectedContent.clientName} className="w-full h-full object-cover" />
+                              ) : (
+                                <CheckCircle2 className="w-5 h-5" />
+                              )}
                             </div>
                             <div>
-                              <div className="text-xs font-bold uppercase tracking-widest">Verified Client</div>
+                              <div className="text-xs font-bold uppercase tracking-widest">{selectedContent.clientName || "Verified Client"}</div>
                               <div className="text-[10px] opacity-70">Project Success</div>
                             </div>
                           </div>
@@ -1119,6 +1280,61 @@ export const BehindTheScenes = () => {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
+                      Client Name
+                    </label>
+                    <input
+                      type="text"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-medium"
+                      placeholder="e.g. Alex Rivers"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
+                      Client Photo
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex-grow flex items-center justify-center gap-2 py-4 px-6 bg-zinc-50 border border-dashed border-black/10 rounded-2xl hover:bg-zinc-100 transition-all cursor-pointer">
+                        <Upload size={14} className="text-zinc-400" />
+                        <span className="text-xs font-medium text-zinc-400">{clientPhoto ? 'Photo Selected' : 'Upload Client Photo'}</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = async () => {
+                                const base64 = reader.result as string;
+                                const compressed = await compressImage(base64, 200, 200, 0.7);
+                                setClientPhoto(compressed);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }} 
+                          className="hidden" 
+                        />
+                      </label>
+                      {clientPhoto && (
+                        <div className="w-14 h-14 rounded-xl overflow-hidden border border-black/5 relative group">
+                          <img src={clientPhoto} alt="Client" className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => setClientPhoto(null)}
+                            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
                     Description
@@ -1182,22 +1398,80 @@ export const BehindTheScenes = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
-                    WhatsApp Chat (JSON Format)
+                <div className="space-y-4">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                    WhatsApp Chat Simulation
                   </label>
-                  <textarea
-                    value={JSON.stringify(whatsappChat, null, 2)}
-                    onChange={(e) => {
-                      try {
-                        setWhatsappChat(JSON.parse(e.target.value));
-                      } catch (err) {
-                        // Handle invalid JSON silently while typing
-                      }
-                    }}
-                    className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-mono text-xs min-h-[150px]"
-                    placeholder='[{"role": "client", "text": "Hi", "time": "10:00 AM"}]'
-                  />
+                  <div className="space-y-3 bg-zinc-50 p-6 rounded-[2rem] border border-black/5">
+                    {whatsappChat.map((msg, idx) => (
+                      <div key={idx} className="flex gap-3 items-start group/msg">
+                        <select 
+                          value={msg.role}
+                          onChange={(e) => {
+                            const newChat = [...whatsappChat];
+                            newChat[idx].role = e.target.value as 'client' | 'designer';
+                            setWhatsappChat(newChat);
+                          }}
+                          className="bg-white border border-black/5 rounded-lg px-2 py-1 text-[10px] font-bold"
+                        >
+                          <option value="client">Client</option>
+                          <option value="designer">Designer</option>
+                        </select>
+                        <input 
+                          type="text"
+                          value={msg.text}
+                          onChange={(e) => {
+                            const newChat = [...whatsappChat];
+                            newChat[idx].text = e.target.value;
+                            setWhatsappChat(newChat);
+                          }}
+                          className="flex-grow bg-white border border-black/5 rounded-xl px-4 py-2 text-xs font-medium focus:outline-none focus:border-blue-600"
+                          placeholder={msg.isVoice ? "Voice message duration (e.g. 0:15)" : "Message text..."}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newChat = [...whatsappChat];
+                            newChat[idx].isVoice = !newChat[idx].isVoice;
+                            if (newChat[idx].isVoice) {
+                              newChat[idx].duration = newChat[idx].text || "0:15";
+                            }
+                            setWhatsappChat(newChat);
+                          }}
+                          className={`p-2 rounded-xl transition-all ${msg.isVoice ? 'bg-blue-600 text-white' : 'bg-white text-zinc-400 border border-black/5'}`}
+                          title="Toggle Voice Message"
+                        >
+                          <Mic size={14} />
+                        </button>
+                        <input 
+                          type="text"
+                          value={msg.time}
+                          onChange={(e) => {
+                            const newChat = [...whatsappChat];
+                            newChat[idx].time = e.target.value;
+                            setWhatsappChat(newChat);
+                          }}
+                          className="w-20 bg-white border border-black/5 rounded-xl px-2 py-2 text-[10px] font-mono"
+                          placeholder="10:00 AM"
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => setWhatsappChat(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-2 text-red-500 opacity-0 group-hover/msg:opacity-100 transition-opacity"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      type="button"
+                      onClick={() => setWhatsappChat(prev => [...prev, { role: 'client', text: '', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])}
+                      className="w-full py-3 border border-dashed border-zinc-300 rounded-xl text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:border-blue-600 hover:text-blue-600 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus size={14} />
+                      Add Message
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1218,7 +1492,7 @@ export const BehindTheScenes = () => {
                         <div className="p-4 grid grid-cols-3 gap-2 h-full overflow-y-auto custom-scrollbar">
                           {beforeImages.map((img, idx) => (
                             <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-black/5 group/img">
-                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx}`} />
+                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx}`} loading="lazy" />
                               <button 
                                 type="button" 
                                 onClick={() => setBeforeImages(prev => prev.filter((_, i) => i !== idx))}
@@ -1260,7 +1534,7 @@ export const BehindTheScenes = () => {
                         <div className="p-4 grid grid-cols-3 gap-2 h-full overflow-y-auto custom-scrollbar">
                           {afterImages.map((img, idx) => (
                             <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-black/5 group/img">
-                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx}`} />
+                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx}`} loading="lazy" />
                               <button 
                                 type="button" 
                                 onClick={() => setAfterImages(prev => prev.filter((_, i) => i !== idx))}
@@ -1301,7 +1575,7 @@ export const BehindTheScenes = () => {
                   >
                     {image ? (
                       <>
-                        <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={image} alt="Preview" className="w-full h-full object-cover" loading="lazy" />
                         <button
                           type="button"
                           onClick={() => setImage(null)}

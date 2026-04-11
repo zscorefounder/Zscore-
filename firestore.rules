@@ -74,7 +74,7 @@ service cloud.firestore {
     }
 
     function isValidBTS(data) {
-      let allowedFields = ['title', 'videoTitle', 'description', 'layoutIdea', 'designWorkflow', 'caseStudy', 'clientFeedback', 'whatsappChat', 'imageUrl', 'beforeImages', 'afterImages', 'createdAt'];
+      let allowedFields = ['title', 'videoTitle', 'description', 'layoutIdea', 'designWorkflow', 'caseStudy', 'clientFeedback', 'clientName', 'clientPhoto', 'whatsappChat', 'imageUrl', 'beforeImages', 'afterImages', 'createdAt'];
       let requiredFields = ['title', 'imageUrl', 'createdAt'];
       
       return data.keys().hasAll(requiredFields) &&
@@ -87,6 +87,8 @@ service cloud.firestore {
              (!('designWorkflow' in data) || (data.designWorkflow == null || (data.designWorkflow is string && data.designWorkflow.size() <= 2000))) &&
              (!('caseStudy' in data) || (data.caseStudy == null || (data.caseStudy is string && data.caseStudy.size() <= 10000))) &&
              (!('clientFeedback' in data) || (data.clientFeedback == null || (data.clientFeedback is string && data.clientFeedback.size() <= 2000))) &&
+             (!('clientName' in data) || (data.clientName == null || (data.clientName is string && data.clientName.size() <= 100))) &&
+             (!('clientPhoto' in data) || (data.clientPhoto == null || (data.clientPhoto is string && data.clientPhoto.size() <= 1048576))) &&
              (!('whatsappChat' in data) || (data.whatsappChat == null || (data.whatsappChat is list && data.whatsappChat.size() <= 50))) &&
              (!('beforeImages' in data) || (data.beforeImages == null || (data.beforeImages is list && data.beforeImages.size() <= 5))) &&
              (!('afterImages' in data) || (data.afterImages == null || (data.afterImages is list && data.afterImages.size() <= 5))) &&

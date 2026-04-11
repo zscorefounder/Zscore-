@@ -195,7 +195,7 @@ export const CommentsSection = () => {
 
             {image && (
               <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-black/5">
-                <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                <img src={image} alt="Preview" className="w-full h-full object-cover" loading="lazy" />
                 <button 
                   type="button"
                   onClick={() => setImage(null)}
@@ -301,7 +301,7 @@ export const CommentsSection = () => {
                   </p>
                   {c.image && (
                     <div className="rounded-2xl overflow-hidden border border-black/5 mb-4 max-w-full">
-                      <img src={c.image} alt="Comment attachment" className="w-full h-auto" referrerPolicy="no-referrer" />
+                      <img src={c.image} alt="Comment attachment" className="w-full h-auto" referrerPolicy="no-referrer" loading="lazy" />
                     </div>
                   )}
                 </motion.div>
