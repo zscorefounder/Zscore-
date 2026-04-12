@@ -57,6 +57,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-do
 import { GoogleGenAI, Modality } from "@google/genai";
 import WorkPage from './pages/WorkPage';
 import AboutPage from './pages/AboutPage';
+import JourneyPage from './pages/JourneyPage';
 import { auth } from './firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { ThumbnailGallery } from './components/ThumbnailGallery';
@@ -794,11 +795,11 @@ const CustomCursor = () => {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   
-  const springConfig = { damping: 25, stiffness: 300, mass: 0.5 };
+  const springConfig = { damping: 20, stiffness: 250, mass: 0.6 };
   const springX = useSpring(mouseX, springConfig);
   const springY = useSpring(mouseY, springConfig);
   
-  const dotSpringConfig = { damping: 40, stiffness: 500, mass: 0.1 };
+  const dotSpringConfig = { damping: 30, stiffness: 400, mass: 0.1 };
   const dotSpringX = useSpring(mouseX, dotSpringConfig);
   const dotSpringY = useSpring(mouseY, dotSpringConfig);
 
@@ -857,9 +858,9 @@ const CustomCursor = () => {
 
   return (
     <>
-      {/* Outer Ring */}
+      {/* Outer Ring - Premium Glass Effect */}
       <motion.div
-        className="fixed top-0 left-0 pointer-events-none z-[9999] hidden md:block mix-blend-difference"
+        className="fixed top-0 left-0 pointer-events-none z-[9999] hidden md:block"
         style={{
           x: springX,
           y: springY,
@@ -867,18 +868,19 @@ const CustomCursor = () => {
           translateY: '-50%',
         }}
         animate={{
-          width: isClicking ? 40 : (isHovering ? 80 : 32),
-          height: isClicking ? 40 : (isHovering ? 80 : 32),
-          backgroundColor: isHovering ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0)',
-          border: isHovering ? '1px solid rgba(255, 255, 255, 0.5)' : '1px solid rgba(255, 255, 255, 0.3)',
-          borderRadius: cursorType === 'text' ? '4px' : '50%',
+          width: isClicking ? 40 : (isHovering ? 100 : 48),
+          height: isClicking ? 40 : (isHovering ? 100 : 48),
+          backgroundColor: isHovering ? 'rgba(59, 130, 246, 0.05)' : 'rgba(0, 0, 0, 0)',
+          border: isHovering ? '1.5px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(0, 0, 0, 0.15)',
+          borderRadius: cursorType === 'text' ? '8px' : '50%',
+          backdropFilter: isHovering ? 'blur(4px)' : 'blur(0px)',
         }}
-        transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+        transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
       />
       
-      {/* Inner Dot */}
+      {/* Inner Dot - Dynamic Color */}
       <motion.div
-        className="fixed top-0 left-0 w-1.5 h-1.5 bg-white rounded-full pointer-events-none z-[9999] hidden md:block mix-blend-difference"
+        className="fixed top-0 left-0 w-2 h-2 bg-blue-600 rounded-full pointer-events-none z-[9999] hidden md:block shadow-[0_0_10px_rgba(59,130,246,0.5)]"
         style={{
           x: dotSpringX,
           y: dotSpringY,
@@ -886,8 +888,20 @@ const CustomCursor = () => {
           translateY: '-50%',
         }}
         animate={{
-          scale: isClicking ? 2 : (isHovering ? 0 : 1),
-          opacity: isHovering && cursorType === 'pointer' ? 0 : 1
+          scale: isClicking ? 2.5 : (isHovering ? 0 : 1),
+          opacity: isHovering && cursorType === 'pointer' ? 0 : 1,
+          backgroundColor: isClicking ? '#ef4444' : '#2563eb'
+        }}
+      />
+
+      {/* Trailing Blur Effect */}
+      <motion.div
+        className="fixed top-0 left-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl pointer-events-none z-[9998] hidden md:block"
+        style={{
+          x: springX,
+          y: springY,
+          translateX: '-50%',
+          translateY: '-50%',
         }}
       />
 
@@ -895,9 +909,9 @@ const CustomCursor = () => {
       <AnimatePresence>
         {isHovering && cursorType === 'pointer' && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            exit={{ opacity: 0, scale: 0.5, rotate: 10 }}
             className="fixed top-0 left-0 pointer-events-none z-[9999] hidden md:flex items-center justify-center"
             style={{
               x: springX,
@@ -906,8 +920,8 @@ const CustomCursor = () => {
               translateY: '-50%',
             }}
           >
-            <div className="text-[8px] font-black uppercase tracking-widest text-white mix-blend-difference">
-              View
+            <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-xl">
+              Explore
             </div>
           </motion.div>
         )}
@@ -946,7 +960,7 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
   const navItems: { id: SectionId; label: string; path?: string }[] = [
     { id: 'home', label: 'Home' },
     { id: 'about', label: 'About', path: '/about' },
-    { id: 'journey', label: 'Journey' },
+    { id: 'journey', label: 'Journey', path: '/journey' },
     { id: 'process', label: 'Process' },
     { id: 'pricing', label: 'Pricing' },
     { id: 'contact', label: 'Contact' },
@@ -2682,7 +2696,8 @@ export default function App() {
                     <Contact />
                   </>
                 } />
-                <Route path="/work" element={<WorkPage />} />
+                <Route path="/journey" element={<JourneyPage />} />
+          <Route path="/work" element={<WorkPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/thumbnails" element={<div className="pt-32 px-6 max-w-7xl mx-auto"><ThumbnailGallery /></div>} />
               </Routes>

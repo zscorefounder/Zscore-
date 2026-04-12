@@ -35,6 +35,7 @@ import { useAdmin } from '../hooks/useAdmin';
 import { ThumbnailGallery } from '../components/ThumbnailGallery';
 import { BehindTheScenes } from '../components/BehindTheScenes';
 import { PushPin } from '../components/PushPin';
+import { TableOfContents } from '../components/TableOfContents';
 import { 
   db, 
   collection, 
@@ -197,7 +198,7 @@ const Reviews = () => (
 );
 
 const TrustedClients = () => (
-  <section className="py-32 px-6 bg-[#F5F5F5] relative overflow-hidden">
+  <section id="clients" className="py-32 px-6 bg-[#F5F5F5] relative overflow-hidden">
     {/* Background Grid */}
     <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
       style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '40px 40px' }} 
@@ -412,7 +413,7 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-start overflow-hidden pt-32 pb-20 bg-[#FAF9F6]">
+    <section id="hero" className="relative min-h-screen flex flex-col items-center justify-start overflow-hidden pt-32 pb-20 bg-[#FAF9F6]">
       {/* Background Grid */}
       <div className="absolute inset-0 opacity-[0.02] pointer-events-none" 
         style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '40px 40px' }} 
@@ -1227,6 +1228,16 @@ const WorkPage = () => {
         <title>Work | Z Score - Premium Portfolio</title>
       </Helmet>
 
+      <TableOfContents 
+        items={[
+          { id: 'hero', label: 'Home' },
+          { id: 'portfolio', label: 'Portfolio' },
+          { id: 'bts', label: 'Behind The Scenes' },
+          { id: 'reviews', label: 'Reviews' },
+          { id: 'clients', label: 'Clients' }
+        ]} 
+      />
+
       {/* Subtle Grain Overlay */}
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none z-50 bg-[url('https://www.transparenttextures.com/patterns/p6.png')]" />
 
@@ -1435,10 +1446,14 @@ const WorkPage = () => {
         </div>
 
         {/* Live Thumbnails Section */}
-        <ThumbnailGallery />
+        <div id="portfolio">
+          <ThumbnailGallery />
+        </div>
 
         {/* Behind The Scenes Section */}
-        <BehindTheScenes />
+        <div id="bts">
+          <BehindTheScenes />
+        </div>
 
         <Reviews />
         <TrustedClients />

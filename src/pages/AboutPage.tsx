@@ -33,6 +33,7 @@ import { Link } from 'react-router-dom';
 import { ZSpinner } from '../components/ZLoading';
 import { useAdmin } from '../hooks/useAdmin';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { TableOfContents } from '../components/TableOfContents';
 import { toast } from 'sonner';
 
 // --- EDITABLE CONTENT START ---
@@ -270,6 +271,18 @@ const AboutPage = () => {
         <title>About | {PERSONAL_INFO.name}</title>
       </Helmet>
 
+      <TableOfContents 
+        items={[
+          { id: 'header', label: 'Intro' },
+          { id: 'experience', label: 'Experience' },
+          { id: 'milestones', label: 'Milestones' },
+          { id: 'philosophy', label: 'Philosophy' },
+          { id: 'workspace', label: 'Workspace' },
+          { id: 'process', label: 'Process' },
+          { id: 'faq', label: 'FAQ' }
+        ]} 
+      />
+
       {/* Graph Paper Background */}
       <div className="fixed inset-0 pointer-events-none opacity-40 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px] z-0" />
       <div className="fixed inset-0 pointer-events-none opacity-10 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] [background-size:24px_24px] z-0" />
@@ -293,7 +306,7 @@ const AboutPage = () => {
       <main className="pt-32 pb-40 px-6 max-w-6xl mx-auto relative z-10">
         
         {/* HEADER SECTION */}
-        <div className="mb-32">
+        <div id="header" className="mb-32">
           <div className="flex flex-col md:flex-row gap-16 items-start">
             {/* Profile Photo with Tape */}
             <div className="relative">
@@ -354,7 +367,7 @@ const AboutPage = () => {
         </div>
 
         {/* WORK EXPERIENCE & SKILLS GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mb-32">
+        <div id="experience" className="grid grid-cols-1 lg:grid-cols-3 gap-12 mb-32">
           {/* Work Experience */}
           <ScrapPaper type="plain" rotation={-1} className="space-y-8">
             <div className="flex items-center gap-3">
@@ -444,7 +457,7 @@ const AboutPage = () => {
         </div>
 
         {/* MILESTONES TIMELINE */}
-        <div className="mb-32 relative">
+        <div id="milestones" className="mb-32 relative">
           <div className="flex items-center gap-3 mb-16">
             <div className="w-4 h-4 bg-yellow-400 rotate-45" />
             <h2 className="text-2xl font-display font-bold uppercase tracking-widest">Milestones</h2>
@@ -472,7 +485,7 @@ const AboutPage = () => {
         </div>
 
         {/* DESIGN PHILOSOPHY */}
-        <div className="mb-32">
+        <div id="philosophy" className="mb-32">
           <div className="flex items-center gap-3 mb-16">
             <div className="w-4 h-4 bg-yellow-400 rotate-45" />
             <h2 className="text-2xl font-display font-bold uppercase tracking-widest">Philosophy</h2>
@@ -514,7 +527,7 @@ const AboutPage = () => {
         </div>
 
         {/* WORKSPACE IMAGES */}
-        <div className="mb-32">
+        <div id="workspace" className="mb-32">
           <div className="flex items-center justify-between mb-12">
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 bg-yellow-400 rotate-45" />
@@ -626,7 +639,7 @@ const AboutPage = () => {
         </div>
 
         {/* CREATIVE PROCESS (NEW SECTION FOR LONG SCROLL) */}
-        <div className="mb-32">
+        <div id="process" className="mb-32">
           <div className="flex items-center gap-3 mb-16">
             <div className="w-4 h-4 bg-yellow-400 rotate-45" />
             <h2 className="text-2xl font-display font-bold uppercase tracking-widest">My Process</h2>
@@ -694,7 +707,7 @@ const AboutPage = () => {
         </div>
 
         {/* FAQ SECTION (NEW SECTION FOR LONG SCROLL) */}
-        <div className="mb-32">
+        <div id="faq" className="mb-32">
           <div className="flex items-center gap-3 mb-16">
             <div className="w-4 h-4 bg-yellow-400 rotate-45" />
             <h2 className="text-2xl font-display font-bold uppercase tracking-widest">Common Queries</h2>
@@ -721,34 +734,47 @@ const AboutPage = () => {
 
         {/* TABLE OF CONTENT (JOURNAL ENTRY STYLE) */}
         <div className="mb-32">
-          <ScrapPaper type="plain" className="bg-[#1a1a1a] text-white p-12 md:p-20 rounded-sm overflow-hidden relative" rotation={0}>
-            <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
-            <Tape className="-top-4 left-1/2 -translate-x-1/2 w-48 opacity-50" rotation={0} />
+          <ScrapPaper type="plain" className="bg-[#1a1a1a] text-white p-12 md:p-24 rounded-sm overflow-hidden relative border-4 border-white/5" rotation={0}>
+            <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-purple-600/10 pointer-events-none" />
+            <Tape className="-top-4 left-1/2 -translate-x-1/2 w-64 bg-white/10" rotation={0} />
             
             <div className="relative z-10">
-              <div className="flex items-baseline gap-4 mb-16 border-b border-white/10 pb-8">
-                <span className="text-4xl font-handwriting text-yellow-400 italic">Table of</span>
-                <h2 className="text-6xl md:text-8xl font-display font-bold uppercase tracking-tighter leading-none">Content</h2>
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-20 border-b border-white/10 pb-12">
+                <div className="space-y-4">
+                  <span className="text-5xl font-handwriting text-blue-500 italic block -rotate-3">Table of</span>
+                  <h2 className="text-7xl md:text-9xl font-display font-black uppercase tracking-tighter leading-none">Content</h2>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-white/40 mb-2">Issue No. 01</p>
+                  <p className="text-xs font-bold text-blue-500 uppercase tracking-widest">Z Score Portfolio 2026</p>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-24 gap-y-12">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-32 gap-y-16">
                 {[
-                  { num: "01", title: "Social Media", sub: "Creatives" },
-                  { num: "02", title: "Creative", sub: "Prints" },
-                  { num: "03", title: "Logo", sub: "Folio" },
-                  { num: "04", title: "Video", sub: "Ads" }
+                  { num: "01", title: "Social Media", sub: "Creatives", desc: "High-CTR thumbnail strategies" },
+                  { num: "02", title: "Creative", sub: "Prints", desc: "Physical & digital branding" },
+                  { num: "03", title: "Logo", sub: "Folio", desc: "Identity & visual systems" },
+                  { num: "04", title: "Video", sub: "Ads", desc: "Motion graphics & VFX" }
                 ].map((item, i) => (
                   <motion.div 
                     key={i} 
-                    whileHover={{ x: 10 }}
-                    className="flex items-center gap-8 group cursor-pointer border-b border-white/5 pb-4"
+                    whileHover={{ x: 20 }}
+                    className="flex items-start gap-10 group cursor-pointer border-b border-white/5 pb-8 relative"
                   >
-                    <span className="text-5xl md:text-7xl font-display font-black opacity-20 group-hover:opacity-100 group-hover:text-yellow-400 transition-all duration-500">
+                    <span className="text-6xl md:text-8xl font-display font-black text-white/5 group-hover:text-blue-600/20 transition-all duration-700 absolute -left-12 -top-4">
                       {item.num}
                     </span>
-                    <div className="space-y-0">
-                      <h3 className="text-xl md:text-2xl font-display font-bold uppercase tracking-tighter">{item.title}</h3>
-                      <span className="text-lg font-handwriting text-yellow-400/60 italic group-hover:text-yellow-400 transition-colors">{item.sub}</span>
+                    <div className="relative z-10 space-y-2">
+                      <div className="flex items-center gap-4">
+                        <h3 className="text-2xl md:text-3xl font-display font-bold uppercase tracking-tighter group-hover:text-blue-500 transition-colors">{item.title}</h3>
+                        <div className="h-px flex-grow bg-white/10 group-hover:bg-blue-500/30 transition-all" />
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xl font-handwriting text-blue-500/60 italic group-hover:text-blue-400 transition-colors">{item.sub}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-white/30 group-hover:text-white/60">{item.desc}</span>
+                      </div>
                     </div>
                   </motion.div>
                 ))}

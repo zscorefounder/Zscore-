@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useSpring, useMotionValue, useTransform } from 'motion/react';
 import { 
   Plus, 
   Image as ImageIcon, 
@@ -287,6 +287,35 @@ export const ThumbnailGallery = () => {
     message: '',
     onConfirm: () => {},
   });
+
+  // Smooth Scroll Logic
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollContentRef = useRef<HTMLDivElement>(null);
+  const mouseX = useMotionValue(0);
+  const smoothX = useSpring(mouseX, { damping: 20, stiffness: 100, mass: 0.5 });
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!scrollContainerRef.current || !scrollContentRef.current) return;
+    
+    const rect = scrollContainerRef.current.getBoundingClientRect();
+    const contentWidth = scrollContentRef.current.scrollWidth;
+    const containerWidth = rect.width;
+    
+    if (contentWidth <= containerWidth) {
+      mouseX.set(0);
+      return;
+    }
+
+    const mouseXPos = e.clientX - rect.left;
+    const percentage = mouseXPos / containerWidth;
+    const targetX = -(contentWidth - containerWidth) * percentage;
+    
+    mouseX.set(targetX);
+  };
+
+  const handleMouseLeave = () => {
+    // Optional: Reset or keep position
+  };
 
   // Form state
   const [title, setTitle] = useState('');
@@ -1011,18 +1040,35 @@ export const ThumbnailGallery = () => {
               <ZSpinner size={60} />
             </div>
           )}
-          <div className="flex flex-wrap justify-center gap-12">
-            {filteredThumbnails.map((thumb, i) => (
-              <ThumbnailItem 
-                key={thumb.id}
-                thumb={thumb}
-                i={i}
-                isAdmin={isAdmin}
-                refiningId={refiningId}
-                handleRefine={handleRefine}
-                handleDelete={handleDelete}
-              />
-            ))}
+          
+          <div 
+            ref={scrollContainerRef}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            className="relative overflow-hidden cursor-none group/gallery py-10"
+          >
+            <motion.div 
+              ref={scrollContentRef}
+              style={{ x: smoothX }}
+              className="flex gap-12 px-12 items-center"
+            >
+              {filteredThumbnails.map((thumb, i) => (
+                <div key={thumb.id} className="min-w-[300px] md:min-w-[450px]">
+                  <ThumbnailItem 
+                    thumb={thumb}
+                    i={i}
+                    isAdmin={isAdmin}
+                    refiningId={refiningId}
+                    handleRefine={handleRefine}
+                    handleDelete={handleDelete}
+                  />
+                </div>
+              ))}
+            </motion.div>
+
+            {/* Scroll Indicators */}
+            <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-[#FAF9F6] to-transparent pointer-events-none z-10 opacity-0 group-hover/gallery:opacity-100 transition-opacity" />
+            <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#FAF9F6] to-transparent pointer-events-none z-10 opacity-0 group-hover/gallery:opacity-100 transition-opacity" />
           </div>
 
           {hasMore && (
