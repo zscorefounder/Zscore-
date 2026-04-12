@@ -52,7 +52,7 @@ interface Thumbnail {
 }
 
 const CATEGORIES = ['All', 'Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'];
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 40;
 
 const ThumbnailSkeleton = () => (
   <div className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-2rem)] lg:w-[calc(50%-2.5rem)] max-w-lg mx-auto border border-black/[0.02] space-y-6">

@@ -531,6 +531,84 @@ const AIChat = () => {
   );
 };
 
+// --- Welcome Popup Component ---
+const WelcomePopup = () => {
+  const [isVisible, setIsVisible] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Only show on home page
+    if (location.pathname !== '/') return;
+
+    const hasSeenPopup = sessionStorage.getItem('z_score_welcome_popup_seen');
+    if (!hasSeenPopup) {
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, 3000); // Show after 3 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [location.pathname]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    sessionStorage.setItem('z_score_welcome_popup_seen', 'true');
+  };
+
+  const handleGoToWork = () => {
+    handleClose();
+  };
+
+  return (
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 50, scale: 0.9 }}
+          className="fixed bottom-24 left-6 z-[110] max-w-sm w-[calc(100vw-3rem)]"
+        >
+          <div className="relative backdrop-blur-2xl bg-white/80 border border-white/40 rounded-3xl p-6 shadow-2xl overflow-hidden group">
+            {/* Decorative background element */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl group-hover:bg-blue-600/20 transition-colors" />
+            
+            <button 
+              onClick={handleClose}
+              className="absolute top-4 right-4 p-1 text-zinc-400 hover:text-zinc-900 transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20">
+                  <Briefcase size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-zinc-900 uppercase tracking-tight">Direct Access</h3>
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Work Portfolio</p>
+                </div>
+              </div>
+
+              <p className="text-sm font-medium text-zinc-600 leading-relaxed">
+                Want to see my high-performance thumbnail designs directly? Skip the scrolling and head to my work page.
+              </p>
+
+              <Link 
+                to="/work" 
+                onClick={handleGoToWork}
+                className="w-full bg-zinc-900 text-white py-3 rounded-2xl text-xs font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-blue-600 transition-all shadow-xl shadow-black/10 active:scale-95"
+              >
+                Go to Work Page
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
 // --- Types ---
 type SectionId = 'home' | 'about' | 'journey' | 'process' | 'pricing' | 'contact';
 
@@ -2576,6 +2654,7 @@ export default function App() {
       <WaterBackground />
         <div className="bg-white/0 min-h-screen selection:bg-neon-blue/20 selection:text-black scroll-smooth relative">
           <AIChat />
+          <WelcomePopup />
           <CustomCursor />
           
           {/* Global Background Elements */}
