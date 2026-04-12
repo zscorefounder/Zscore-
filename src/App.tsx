@@ -2562,6 +2562,22 @@ const LoadingScreen = ({ progress }: { progress: number }) => {
   );
 };
 
+// --- Scroll To Top Component ---
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant'
+    });
+  }, [pathname]);
+
+  return null;
+};
+
+// --- Page Transition Component ---
 const PageTransition = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -2583,7 +2599,7 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
 
     const timer = setTimeout(() => {
       setIsTransitioning(false);
-    }, 400);
+    }, 500);
 
     return () => {
       clearTimeout(timer);
@@ -2592,12 +2608,33 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
   }, [location.pathname]);
 
   return (
-    <>
+    <div className="relative">
       <AnimatePresence mode="wait">
-        {isTransitioning && <LoadingScreen key="page-loader" progress={progress} />}
+        {isTransitioning && (
+          <motion.div
+            key="page-loader-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] pointer-events-none"
+          >
+            <LoadingScreen progress={progress} />
+          </motion.div>
+        )}
       </AnimatePresence>
-      {children}
-    </>
+      
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 };
 
@@ -2652,6 +2689,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Toaster position="top-center" richColors />
       <Helmet>
         <title>Z Score | YouTube Thumbnail Design & Growth Expert</title>

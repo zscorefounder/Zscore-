@@ -141,22 +141,22 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8, rotate: 0, y: 50 }}
+      initial={{ opacity: 0, scale: 0.95, y: 30 }}
       whileInView={{ 
         opacity: 1, 
         scale: 1, 
-        rotate: [-2, 2, -1, 1][i % 4],
+        rotate: [-1, 1, -0.5, 0.5][i % 4],
         y: 0
       }}
       whileHover={{ 
-        scale: 1.05, 
+        scale: 1.02, 
         rotate: 0, 
         zIndex: 30,
-        y: -10,
-        transition: { duration: 0.3 }
+        y: -5,
+        transition: { duration: 0.2 }
       }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ delay: i * 0.1, duration: 0.5, ease: "easeOut" }}
+      viewport={{ once: true, margin: "100px" }}
+      transition={{ delay: (i % 6) * 0.05, duration: 0.4, ease: "easeOut" }}
       className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-2rem)] lg:w-[calc(50%-2.5rem)] max-w-lg mx-auto group hover:z-30 transition-all cursor-default"
     >
       <PushPin color={pinColors[i % pinColors.length]} />
@@ -188,20 +188,21 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
               <p className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Image failed to load</p>
             </div>
           )}
-          <motion.img 
-            src={thumb.imageUrl} 
-            alt={thumb.title} 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: isLoaded ? 1 : 0 }}
-            onLoad={() => setIsLoaded(true)}
-            onError={() => {
-              setHasError(true);
-              setIsLoaded(true);
-            }}
-            className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110"
-            referrerPolicy="no-referrer"
-            loading="lazy"
-          />
+            <motion.img 
+              src={thumb.imageUrl} 
+              alt={thumb.title} 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isLoaded ? 1 : 0 }}
+              transition={{ duration: 0.3 }}
+              onLoad={() => setIsLoaded(true)}
+              onError={() => {
+                setHasError(true);
+                setIsLoaded(true);
+              }}
+              className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110"
+              referrerPolicy="no-referrer"
+              loading={i < 4 ? "eager" : "lazy"}
+            />
           
           <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-30">
             <button 
@@ -325,8 +326,8 @@ export const ThumbnailGallery = () => {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchThumbnails(true, false); // Use cache by default (force = false)
-    }, 500); // Small delay to let connection stabilize
+      fetchThumbnails(true, false);
+    }, 100);
     return () => clearTimeout(timer);
   }, [activeFilter]);
 
