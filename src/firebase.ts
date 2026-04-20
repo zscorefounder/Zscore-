@@ -31,7 +31,7 @@ const db = initializeFirestore(app, {
   ignoreUndefinedProperties: true,
 }, dbId);
 
-// Set log level to error to suppress the verbose "Could not reach Cloud Firestore backend" warning in transient network states
+// Set log level to error to suppress verbose "Could not reach Cloud Firestore backend" warnings
 setLogLevel('error');
 
 // Enable offline persistence if possible
@@ -88,9 +88,14 @@ async function testConnection() {
   let retries = 2; // Reduced retries to avoid long hang times on boot
   while (retries > 0) {
     try {
-      // Use getDocFromServer to bypass local cache and force a network request
-      // We use a non-existent doc to just test reachability
-      await getDocFromServer(doc(db, '_connection_test_', 'ping'));
+      // Use a race to timeout the connection test faster than the default 10s
+      const pingPromise = getDocFromServer(doc(db, '_connection_test_', 'ping'));
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timed out')), 5000)
+      );
+
+      await Promise.race([pingPromise, timeoutPromise]);
+      
       console.log("Firestore connection successful.");
       sessionStorage.setItem('fs_connection_tested', 'true');
       setFirestoreStatus(true);
@@ -256,20 +261,37 @@ async function fetchAndCache(q: any, cacheKey: string) {
 // Hardcoded fallback data for maximum resilience (Quota exceeded or Offline)
 const FALLBACK_DATA: Record<string, any[]> = {
   'thumbnails': [
-    { id: 'fb1', title: "I Spent 100 Days in a Secret Bunker", category: "Gaming", imageUrl: "https://i.ibb.co/5Xd8rDDZ/image.png", stats: "14.2% CTR", createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fb2', title: "The Crypto Crash: Why Everything is Falling", category: "Finance", imageUrl: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR", createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fb3', title: "AI is Replacing Designers (The Truth)", category: "Tech", imageUrl: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR", createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fb4', title: "Solo Travel in Japan", category: "Vlog", imageUrl: "https://picsum.photos/seed/thumb4/800/450", stats: "42K Views", createdAt: { seconds: Date.now()/1000 } }
+    { id: 'fb1', title: "I Spent 100 Days in a Secret Bunker", description: "A high-intensity gaming layout with custom typography.", category: "Gaming", imageUrl: "https://i.ibb.co/5Xd8rDDZ/image.png", stats: "14.2% CTR", createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fb2', title: "The Crypto Crash: Why Everything is Falling", description: "Finance-focused design with clean data visualization.", category: "Finance", imageUrl: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR", createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fb3', title: "AI is Replacing Designers (The Truth)", description: "Futuristic tech aesthetic with neon accents.", category: "Tech", imageUrl: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR", createdAt: { seconds: Date.now()/1000 } }
   ],
-  'behind_the_scenes': [
+  'behind': [ // Matches 'behind_the_scenes' prefix
     { 
       id: 'fb_bts1', 
       title: "The Psychology of a Viral Hook", 
-      description: "How we achieved a 15% CTR for a major tech creator.",
+      description: "How we achieved a 15% CTR for a major tech creator using psychological framing.",
       imageUrl: "https://picsum.photos/seed/bts1/1920/1080",
       category: "Case Study",
       createdAt: { seconds: Date.now()/1000 }
     }
+  ],
+  'bts': [ // Alias for 'behind_the_scenes'
+    { 
+      id: 'fb_bts2', 
+      title: "Workflow Optimization", 
+      description: "Speeding up the design process by 200% with custom Photoshop actions.",
+      imageUrl: "https://picsum.photos/seed/bts2/1920/1080",
+      category: "Process",
+      createdAt: { seconds: Date.now()/1000 }
+    }
+  ],
+  'random': [ // Matches 'random_posts' prefix
+    { id: 'rp1', title: "Creative Layout", desc: "Minimalist approach.", image: "https://picsum.photos/seed/rp1/800/600", rotate: -5, y: 0, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'rp2', title: "Color Theory", desc: "Vibrant palettes.", image: "https://picsum.photos/seed/rp2/800/600", rotate: 3, y: 20, createdAt: { seconds: Date.now()/1000 } }
+  ],
+  'hero': [ // Matches 'hero_thumbnails' prefix
+    { id: 'ht1', url: "https://picsum.photos/seed/ht1/1200/800", rotate: -2, x: 0, y: 0, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'ht2', url: "https://picsum.photos/seed/ht2/1200/800", rotate: 5, x: 20, y: 10, createdAt: { seconds: Date.now()/1000 } }
   ]
 };
 
@@ -325,26 +347,32 @@ export async function getDocsCached(q: any, cacheKey: string, force = false) {
 
       return await fetchAndCache(q, cacheKey);
     } catch (error) {
-      // If quota exceeded or offline, return ANY cached data as last resort
-      if (error instanceof Error) {
-        const msg = error.message.toLowerCase();
-        if (msg.includes('quota-exceeded') || msg.includes('resource-exhausted') || msg.includes('quota exceeded') || msg.includes('offline')) {
-          console.warn("Firestore unavailable, using stale cache fallback for:", cacheKey);
-          if (localData) return localData;
-          if (cached) return cached.data;
-          
-          // 4. Final Fallback: Hardcoded Data
-          const collectionName = cacheKey.split('_')[0]; // e.g., 'thumbnails' from 'thumbnails_all'
-          if (FALLBACK_DATA[collectionName]) {
-            console.warn(`Using hardcoded fallback data for: ${collectionName}`);
-            return FALLBACK_DATA[collectionName];
-          }
-        }
+      // Return ANY cached data or hardcoded fallback as last resort for ANY error
+      // This is crucial for sandboxed apps where indexes or connectivity might be flaky
+      console.warn(`Fetch failed for ${cacheKey}, attempting to use fallback data. Error:`, error);
+      
+      if (localData) return localData;
+      if (cached) return cached.data;
+      
+      // 4. Final Fallback: Hardcoded Data
+      // Extract prefix before underscore or full key
+      const collectionName = cacheKey.split('_')[0]; 
+      if (FALLBACK_DATA[collectionName]) {
+        console.warn(`Using hardcoded fallback data for: ${collectionName}`);
+        return FALLBACK_DATA[collectionName];
       }
-      throw error;
+      
+      throw error; // Re-throw if absolutely no fallback available
     }
   }
 
-  // Force fetch from Firestore
-  return await fetchAndCache(q, cacheKey);
+  // Force fetch from Firestore with same fallback logic
+  try {
+    return await fetchAndCache(q, cacheKey);
+  } catch (error) {
+    console.warn(`Forced fetch failed for ${cacheKey}, attempting fallback.`, error);
+    const collectionName = cacheKey.split('_')[0];
+    if (FALLBACK_DATA[collectionName]) return FALLBACK_DATA[collectionName];
+    throw error;
+  }
 }

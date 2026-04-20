@@ -19,6 +19,7 @@ import {
   PlayCircle,
   Layout,
   ChevronDown,
+  ChevronRight,
   ArrowRight,
   Target,
   Leaf,
@@ -631,6 +632,34 @@ const HeroSection = () => {
   );
 };
 
+const HangingDescription = ({ text }: { text: string }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  if (!text) return null;
+  
+  const isLong = text.length > 40;
+  
+  return (
+    <div className="relative">
+      <p className={`text-[9px] text-zinc-400 font-medium leading-tight ${isExpanded ? '' : 'line-clamp-2'}`}>
+        {text}
+      </p>
+      {isLong && (
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsExpanded(!isExpanded);
+          }}
+          className="text-[7px] font-bold text-blue-600 hover:text-blue-700 mt-1 uppercase tracking-widest flex items-center gap-0.5"
+        >
+          {isExpanded ? 'Hide' : 'More'}
+          <ChevronRight size={6} className={`transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
+        </button>
+      )}
+    </div>
+  );
+};
+
 const HangingSection = () => {
   const [cards, setCards] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -1206,7 +1235,7 @@ const HangingSection = () => {
                       </div>
                       <div className="space-y-1">
                         <h3 className="font-bold text-zinc-900 text-xs truncate">{card.title}</h3>
-                        <p className="text-[9px] text-zinc-400 font-medium leading-tight line-clamp-2">{card.desc}</p>
+                        <HangingDescription text={card.desc} />
                       </div>
                     </div>
                   </motion.div>
@@ -1253,6 +1282,7 @@ const WorkPage = () => {
       </nav>
 
       <HeroSection />
+      <HangingSection />
 
       <main className="pb-20 px-6 max-w-6xl mx-auto relative z-10">
         {/* Bento Header Section */}
@@ -1455,8 +1485,12 @@ const WorkPage = () => {
           <BehindTheScenes />
         </div>
 
-        <Reviews />
-        <TrustedClients />
+        <div id="reviews">
+          <Reviews />
+        </div>
+        <div id="clients">
+          <TrustedClients />
+        </div>
 
         {/* Behance Redirect Card */}
         <motion.div 

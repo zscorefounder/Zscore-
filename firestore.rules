@@ -61,12 +61,13 @@ service cloud.firestore {
     }
 
     function isValidThumbnail(data) {
-      let allowedFields = ['title', 'imageUrl', 'category', 'stats', 'createdAt'];
+      let allowedFields = ['title', 'description', 'imageUrl', 'category', 'stats', 'createdAt'];
       let requiredFields = ['title', 'imageUrl', 'createdAt'];
       
       return data.keys().hasAll(requiredFields) &&
              data.keys().hasOnly(allowedFields) &&
              data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+             (!('description' in data) || (data.description == null || (data.description is string && data.description.size() <= 1000))) &&
              data.imageUrl is string && data.imageUrl.size() >= 1 && data.imageUrl.size() <= 2097152 && // 2MB limit for base64
              data.createdAt is timestamp &&
              (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&

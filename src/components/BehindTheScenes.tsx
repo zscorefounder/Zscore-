@@ -138,6 +138,7 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
   setSelectedContent: (content: BTSContent) => void,
   setCurrentImageIndex: (index: number) => void
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const pinColors = ["#FF6321", "#3B82F6", "#8B5CF6", "#10B981"];
 
   return (
@@ -214,11 +215,32 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
           )}
         </div>
 
-        <div className="space-y-2">
-          <h4 className="text-xl font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate">
-            {content.title}
-          </h4>
-          <div className="flex items-center justify-between">
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h4 className="text-xl font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate">
+              {content.title}
+            </h4>
+            {content.description && (
+              <div className="relative">
+                <p className={`text-xs text-zinc-500 leading-relaxed font-medium ${isExpanded ? '' : 'line-clamp-3'}`}>
+                  {content.description}
+                </p>
+                {content.description.length > 80 && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExpanded(!isExpanded);
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 mt-1 uppercase tracking-widest flex items-center gap-1"
+                  >
+                    {isExpanded ? 'Show Less' : 'Read More'}
+                    <ChevronRight size={10} className={`transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-black/[0.03]">
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
               {content.category || 'Case Study'}
             </p>

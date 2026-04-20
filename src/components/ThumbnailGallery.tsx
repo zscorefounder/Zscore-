@@ -46,6 +46,7 @@ import { toast } from 'sonner';
 interface Thumbnail {
   id: string;
   title: string;
+  description?: string;
   imageUrl: string;
   category?: string;
   stats?: string;
@@ -130,6 +131,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const pinColors = ["#FF6321", "#3B82F6", "#8B5CF6", "#10B981"];
 
@@ -254,11 +256,32 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
           </div>
         </div>
 
-        <div className="space-y-2">
-          <h4 className="text-xl font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate">
-            {thumb.title}
-          </h4>
-          <div className="flex items-center justify-between">
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h4 className="text-xl font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate">
+              {thumb.title}
+            </h4>
+            {thumb.description && (
+              <div className="relative">
+                <p className={`text-xs text-zinc-500 leading-relaxed font-medium ${isExpanded ? '' : 'line-clamp-2'}`}>
+                  {thumb.description}
+                </p>
+                {thumb.description.length > 60 && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExpanded(!isExpanded);
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 mt-1 uppercase tracking-widest flex items-center gap-1"
+                  >
+                    {isExpanded ? 'Show Less' : 'Read More'}
+                    <ChevronRight size={10} className={`transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-black/[0.03]">
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
               {thumb.category || 'Portfolio'}
             </p>
@@ -336,6 +359,7 @@ export const ThumbnailGallery = () => {
 
   // Form state
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Gaming');
   const [stats, setStats] = useState('');
   const [image, setImage] = useState<string | null>(null);
@@ -471,7 +495,8 @@ export const ThumbnailGallery = () => {
             {
               text: `Analyze this YouTube thumbnail image. 
               1. Generate a highly engaging, click-worthy title (max 60 chars).
-              2. Assign the most accurate category from this specific list: Gaming, Finance, Tech, Vlog, Lifestyle, Entertainment, Education, Music, Travel, Food, Sports.
+              2. Generate a brief, persuasive project description (max 150 chars).
+              3. Assign the most accurate category from this specific list: Gaming, Finance, Tech, Vlog, Lifestyle, Entertainment, Education, Music, Travel, Food, Sports.
               
               Context for categories:
               - Gaming: Video games, esports, walkthroughs.
@@ -502,13 +527,14 @@ export const ThumbnailGallery = () => {
             type: Type.OBJECT,
             properties: {
               title: { type: Type.STRING, description: "A highly engaging, click-worthy title (max 60 chars)." },
+              description: { type: Type.STRING, description: "A brief, persuasive project description (max 150 chars)." },
               category: { 
                 type: Type.STRING, 
                 enum: ['Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'],
                 description: "The most accurate category from the provided list."
               }
             },
-            required: ["title", "category"]
+            required: ["title", "description", "category"]
           }
         },
       });
@@ -528,6 +554,7 @@ export const ThumbnailGallery = () => {
 
       if (isRefining) return result;
       if (result.title) setTitle(result.title);
+      if (result.description) setDescription(result.description);
       if (result.category) setCategory(result.category);
     } catch (error) {
       console.error("AI Analysis failed:", error);
@@ -549,9 +576,10 @@ export const ThumbnailGallery = () => {
           for (const thumb of thumbnails) {
             setRefiningId(thumb.id);
             const result = await analyzeImage(thumb.imageUrl, true);
-            if (result && (result.title || result.category)) {
+            if (result && (result.title || result.category || result.description)) {
               await updateDoc(doc(db, 'thumbnails', thumb.id), {
                 title: result.title || thumb.title,
+                description: result.description || thumb.description || '',
                 category: result.category || thumb.category || 'Portfolio'
               });
             }
@@ -574,9 +602,10 @@ export const ThumbnailGallery = () => {
     setRefiningId(id);
     try {
       const result = await analyzeImage(imageUrl, true);
-      if (result && (result.title || result.category)) {
+      if (result && (result.title || result.category || result.description)) {
         await updateDoc(doc(db, 'thumbnails', id), {
           title: result.title || '',
+          description: result.description || '',
           category: result.category || 'Portfolio'
         });
       }
@@ -610,6 +639,7 @@ export const ThumbnailGallery = () => {
     try {
       const docRef = await addDoc(collection(db, 'thumbnails'), {
         title: title.trim(),
+        description: description.trim(),
         category,
         stats: stats.trim() || '0 views',
         imageUrl: image,
@@ -620,6 +650,7 @@ export const ThumbnailGallery = () => {
       const newThumb: Thumbnail = {
         id: docRef.id,
         title: title.trim(),
+        description: description.trim(),
         category,
         stats: stats.trim() || '0 views',
         imageUrl: image,
@@ -631,6 +662,7 @@ export const ThumbnailGallery = () => {
       clearCache('thumbnails_v3_');
       
       setTitle('');
+      setDescription('');
       setStats('');
       setImage(null);
       setShowForm(false);
@@ -831,6 +863,16 @@ export const ThumbnailGallery = () => {
                       placeholder="e.g. MrBeast Challenge"
                       className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm"
                       required
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Description</label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Enter a brief project description..."
+                      rows={3}
+                      className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm resize-none"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1063,9 +1105,9 @@ export const ThumbnailGallery = () => {
                       const toastId = toast.loading('Seeding sample thumbnails...');
                       try {
                         const samples = [
-                          { title: "Gaming Thumbnail 1", category: "Gaming", stats: "10K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
-                          { title: "Finance Thumbnail 1", category: "Finance", stats: "5K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
-                          { title: "Tech Thumbnail 1", category: "Tech", stats: "20K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` }
+                          { title: "Gaming Thumbnail 1", description: "Pro-level gaming thumbnail with high-contrast visuals and engaging composition.", category: "Gaming", stats: "10K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
+                          { title: "Finance Thumbnail 1", description: "Clean financial advice thumbnail focusing on trust and growth metrics.", category: "Finance", stats: "5K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
+                          { title: "Tech Thumbnail 1", description: "Futuristic tech review style with sleek lighting and clear focal points.", category: "Tech", stats: "20K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` }
                         ];
                         for (const sample of samples) {
                           await addDoc(collection(db, 'thumbnails'), {
