@@ -299,7 +299,7 @@ const AboutPage = () => {
           <span className="font-bold uppercase tracking-[0.3em] text-[10px]">Return</span>
         </Link>
         <div className="flex items-center gap-8">
-          <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="h-8 w-auto brightness-0 opacity-80" loading="lazy" />
+          <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="h-8 w-auto brightness-0 opacity-80" referrerPolicy="no-referrer" loading="lazy" />
         </div>
       </nav>
 
@@ -789,7 +789,7 @@ const AboutPage = () => {
       <footer className="py-20 px-6 border-t border-zinc-100">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8 text-[10px] font-bold uppercase tracking-[0.4em] opacity-40">
           <div className="flex items-center gap-4">
-            <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="h-6 w-auto grayscale brightness-0" loading="lazy" />
+            <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="h-6 w-auto grayscale brightness-0" referrerPolicy="no-referrer" loading="lazy" />
             <span>© 2026 Z-Score Agency</span>
           </div>
           <div className="flex gap-12">

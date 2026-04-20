@@ -195,7 +195,7 @@ export const CommentsSection = () => {
 
             {image && (
               <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-black/5">
-                <img src={image} alt="Preview" className="w-full h-full object-cover" loading="lazy" />
+                <img src={image} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                 <button 
                   type="button"
                   onClick={() => setImage(null)}

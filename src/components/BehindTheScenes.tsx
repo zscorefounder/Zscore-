@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, X, Upload, Loader2, Image as ImageIcon, Send, Sparkles, ChevronRight, ChevronLeft, Layout, Workflow, FileText, ExternalLink, Wand2, MessageSquare, User, Quote, Star, CheckCircle2, CheckCheck, Video, Phone, Mic } from 'lucide-react';
+import { Plus, Trash2, X, Upload, Loader2, Image as ImageIcon, Send, Sparkles, ChevronRight, ChevronLeft, Layout, Workflow, FileText, ExternalLink, Wand2, MessageSquare, User, Quote, Star, CheckCircle2, CheckCheck, Video, Phone, Mic, AlertCircle } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { ZSpinner, ZSkeleton } from './ZLoading';
 import { useAdmin } from '../hooks/useAdmin';
+import { useFirestoreStatus } from '../hooks/useFirestoreStatus';
 import { db, auth, handleFirestoreError, OperationType, getDocsCached, clearCache } from '../firebase';
 import { 
   collection, 
@@ -103,12 +104,12 @@ const BeforeAfterSlider = ({ before, after }: { before: string, after: string })
       onMouseMove={handleMove}
       onTouchMove={handleMove}
     >
-      <img src={after} className="absolute inset-0 w-full h-full object-cover" alt="After" />
+      <img src={after} className="absolute inset-0 w-full h-full object-cover" alt="After" referrerPolicy="no-referrer" />
       <div 
         className="absolute inset-0 w-full h-full overflow-hidden"
         style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
       >
-        <img src={before} className="absolute inset-0 w-full h-full object-cover" alt="Before" />
+        <img src={before} className="absolute inset-0 w-full h-full object-cover" alt="Before" referrerPolicy="no-referrer" />
       </div>
       
       {/* Slider Line */}
@@ -244,6 +245,7 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
                     src={content.beforeImages[0]} 
                     className="w-full h-full object-cover" 
                     alt="Before" 
+                    referrerPolicy="no-referrer"
                     loading="lazy"
                   />
                 </div>
@@ -257,6 +259,7 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
                     src={content.afterImages[0]} 
                     className="w-full h-full object-cover" 
                     alt="After" 
+                    referrerPolicy="no-referrer"
                     loading="lazy"
                   />
                 </div>
@@ -270,6 +273,7 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
 };
 
 export const BehindTheScenes = () => {
+  const isConnected = useFirestoreStatus();
   const [contents, setContents] = useState<BTSContent[]>([]);
   const { isAdmin } = useAdmin();
   const [showForm, setShowForm] = useState(false);
@@ -315,21 +319,40 @@ export const BehindTheScenes = () => {
     try {
       const sampleData = [
         {
-          title: "Gaming Channel Rebrand",
-          category: "Gaming",
-          description: "Complete visual overhaul for a top-tier gaming channel.",
-          imageUrl: "https://picsum.photos/seed/game1/800/450",
-          beforeImages: ["https://picsum.photos/seed/game_old/800/450"],
-          afterImages: ["https://picsum.photos/seed/game_new/800/450"],
+          title: "Gaming Channel Rebrand 2024",
+          description: "Complete visual overhaul for a top-tier gaming channel, focusing on high-energy aesthetics and brand consistency.",
+          mainImage: "https://picsum.photos/seed/game1/1200/800",
+          beforeImages: ["https://picsum.photos/seed/game_old/800/600"],
+          afterImages: ["https://picsum.photos/seed/game_new/800/600"],
+          clientName: "Alex 'ProGamer' Rivers",
+          clientPhoto: "https://picsum.photos/seed/alex/200/200",
+          layout: "Dynamic & Bold",
+          workflow: "Concept Art -> 3D Modeling -> UI Integration -> Final Polish",
+          feedback: "The new look has completely changed how my audience perceives the brand. Engagement is up 30%!",
+          whatsappChat: [
+            { role: 'client', text: "Yo! The new channel art is insane. Everyone is loving it!", time: "11:20 AM" },
+            { role: 'designer', text: "That's awesome to hear, Alex! We really wanted to capture that high-energy vibe.", time: "11:25 AM" },
+            { role: 'client', isVoice: true, duration: "0:18", time: "11:30 AM" },
+            { role: 'designer', text: "Haha, glad you're hyped! Let's get those thumbnails started next.", time: "11:35 AM" }
+          ],
           createdAt: serverTimestamp()
         },
         {
-          title: "Tech Review Style",
-          category: "Tech",
-          description: "Clean, minimalist aesthetic for high-end tech reviews.",
-          imageUrl: "https://picsum.photos/seed/tech1/800/450",
-          beforeImages: ["https://picsum.photos/seed/tech_old/800/450"],
-          afterImages: ["https://picsum.photos/seed/tech_new/800/450"],
+          title: "Minimalist Tech Review Aesthetic",
+          description: "Clean, minimalist aesthetic for high-end tech reviews, emphasizing product details and clarity.",
+          mainImage: "https://picsum.photos/seed/tech1/1200/800",
+          beforeImages: ["https://picsum.photos/seed/tech_old/800/600"],
+          afterImages: ["https://picsum.photos/seed/tech_new/800/600"],
+          clientName: "TechFocus Reviews",
+          clientPhoto: "https://picsum.photos/seed/techfocus/200/200",
+          layout: "Clean & Structured",
+          workflow: "Style Guide -> Layout Design -> Color Grading -> Final Export",
+          feedback: "The minimalism really lets the products shine. Exactly what we were looking for.",
+          whatsappChat: [
+            { role: 'client', text: "The new layout is perfect. Very clean.", time: "2:00 PM" },
+            { role: 'designer', text: "Great! We kept the white space intentional to focus on the product shots.", time: "2:05 PM" },
+            { role: 'client', text: "Exactly. It feels much more premium now.", time: "2:10 PM" }
+          ],
           createdAt: serverTimestamp()
         }
       ];
@@ -340,7 +363,7 @@ export const BehindTheScenes = () => {
 
       clearCache('bts_limit_10');
       await fetchBTS(true);
-      toast.success('Sample data seeded!', { id: toastId });
+      toast.success('Detailed sample data seeded!', { id: toastId });
     } catch (err) {
       toast.error('Failed to seed data', { id: toastId });
       handleFirestoreError(err, OperationType.CREATE, 'behind_the_scenes');
@@ -747,6 +770,26 @@ export const BehindTheScenes = () => {
         </div>
       </div>
       {/* BTS Grid */}
+      {/* Offline Warning */}
+      {!isConnected && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-3 text-orange-700 max-w-5xl mx-auto"
+        >
+          <AlertCircle size={20} />
+          <div className="text-xs font-bold uppercase tracking-widest">
+            Database is currently offline. Showing cached data if available.
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="ml-auto px-4 py-2 bg-orange-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-orange-700 transition-all"
+          >
+            Reconnect
+          </button>
+        </motion.div>
+      )}
+
       <div className="flex flex-wrap justify-center gap-12">
         {loading && contents.length === 0 ? (
           <div className="flex flex-wrap justify-center gap-12 w-full">
@@ -874,6 +917,7 @@ export const BehindTheScenes = () => {
                           transition={{ duration: 0.3 }}
                           className="w-full h-full object-contain"
                           alt={carouselImages[currentImageIndex]?.label}
+                          referrerPolicy="no-referrer"
                           loading="lazy"
                         />
                       </AnimatePresence>
@@ -908,7 +952,7 @@ export const BehindTheScenes = () => {
                             currentImageIndex === idx ? 'border-blue-600 scale-110' : 'border-transparent opacity-50 hover:opacity-100'
                           }`}
                         >
-                          <img src={img.url} className="w-full h-full object-cover" alt={img.label} loading="lazy" />
+                          <img src={img.url} className="w-full h-full object-cover" alt={img.label} referrerPolicy="no-referrer" loading="lazy" />
                         </button>
                       ))}
                     </div>
@@ -934,7 +978,7 @@ export const BehindTheScenes = () => {
                         <div className="grid grid-cols-2 gap-6">
                           {selectedContent.beforeImages.map((img, idx) => (
                             <div key={idx} className="aspect-video rounded-[2.5rem] overflow-hidden border border-black/5 shadow-xl shadow-black/5 hover:scale-[1.02] transition-transform duration-500">
-                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx + 1}`} loading="lazy" />
+                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx + 1}`} referrerPolicy="no-referrer" loading="lazy" />
                             </div>
                           ))}
                         </div>
@@ -947,7 +991,7 @@ export const BehindTheScenes = () => {
                         <div className="grid grid-cols-2 gap-6">
                           {selectedContent.afterImages.map((img, idx) => (
                             <div key={idx} className="aspect-video rounded-[2.5rem] overflow-hidden border border-blue-600/10 shadow-2xl shadow-blue-600/5 hover:scale-[1.02] transition-transform duration-500">
-                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx + 1}`} loading="lazy" />
+                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx + 1}`} referrerPolicy="no-referrer" loading="lazy" />
                             </div>
                           ))}
                         </div>
@@ -1140,7 +1184,7 @@ export const BehindTheScenes = () => {
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center overflow-hidden border border-white/10">
                               {selectedContent.clientPhoto ? (
-                                <img src={selectedContent.clientPhoto} alt={selectedContent.clientName} className="w-full h-full object-cover" />
+                                <img src={selectedContent.clientPhoto} alt={selectedContent.clientName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <CheckCircle2 className="w-5 h-5" />
                               )}
@@ -1321,7 +1365,7 @@ export const BehindTheScenes = () => {
                       </label>
                       {clientPhoto && (
                         <div className="w-14 h-14 rounded-xl overflow-hidden border border-black/5 relative group">
-                          <img src={clientPhoto} alt="Client" className="w-full h-full object-cover" />
+                          <img src={clientPhoto} alt="Client" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           <button 
                             type="button"
                             onClick={() => setClientPhoto(null)}
@@ -1492,7 +1536,7 @@ export const BehindTheScenes = () => {
                         <div className="p-4 grid grid-cols-3 gap-2 h-full overflow-y-auto custom-scrollbar">
                           {beforeImages.map((img, idx) => (
                             <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-black/5 group/img">
-                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx}`} loading="lazy" />
+                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx}`} referrerPolicy="no-referrer" loading="lazy" />
                               <button 
                                 type="button" 
                                 onClick={() => setBeforeImages(prev => prev.filter((_, i) => i !== idx))}
@@ -1534,7 +1578,7 @@ export const BehindTheScenes = () => {
                         <div className="p-4 grid grid-cols-3 gap-2 h-full overflow-y-auto custom-scrollbar">
                           {afterImages.map((img, idx) => (
                             <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-black/5 group/img">
-                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx}`} loading="lazy" />
+                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx}`} referrerPolicy="no-referrer" loading="lazy" />
                               <button 
                                 type="button" 
                                 onClick={() => setAfterImages(prev => prev.filter((_, i) => i !== idx))}
@@ -1575,7 +1619,7 @@ export const BehindTheScenes = () => {
                   >
                     {image ? (
                       <>
-                        <img src={image} alt="Preview" className="w-full h-full object-cover" loading="lazy" />
+                        <img src={image} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                         <button
                           type="button"
                           onClick={() => setImage(null)}

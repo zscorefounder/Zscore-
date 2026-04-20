@@ -1280,10 +1280,27 @@ const Hero = () => {
     </section>
   );
 };
-const About = () => (
-  <section id="about" className="section-padding px-6 max-w-7xl mx-auto relative">
-    {/* Decorative Elements */}
-    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 blur-[100px] rounded-full -z-10" />
+const About = () => {
+  const containerRef = useRef(null);
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start end", "end start"]
+  });
+  
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+  const y2 = useTransform(scrollYProgress, [0, 1], [0, 100]);
+
+  return (
+    <section id="about" ref={containerRef} className="section-padding px-6 max-w-7xl mx-auto relative overflow-hidden">
+      {/* Dynamic Background Elements */}
+      <motion.div 
+        style={{ y: y1 }}
+        className="absolute top-20 right-0 w-96 h-96 bg-blue-600/5 blur-[120px] rounded-full -z-10" 
+      />
+      <motion.div 
+        style={{ y: y2 }}
+        className="absolute bottom-0 left-0 w-64 h-64 bg-orange-600/5 blur-[100px] rounded-full -z-10" 
+      />
     
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
       <motion.div
@@ -1299,58 +1316,50 @@ const About = () => (
             className="flex items-center gap-2"
           >
             <div className="w-8 h-[1px] bg-blue-600" />
-            <span className="text-blue-600 font-bold uppercase tracking-[0.2em] text-[10px]">The Visionary</span>
+            <span className="text-blue-600 font-bold uppercase tracking-[0.2em] text-[10px]">The Architect of Attention</span>
           </motion.div>
-          <h2 className="text-6xl md:text-7xl font-display font-bold leading-[0.9] text-[#1A1A1A] tracking-tighter">
+          <h2 className="text-7xl md:text-8xl font-display font-black leading-[0.85] text-[#1A1A1A] tracking-tighter">
             I'm Zeeshan, <br />
-            Architect of <span className="text-blue-600 italic">Attention.</span>
+            <span className="relative inline-block">
+              Architect of
+              <motion.svg 
+                viewBox="0 0 300 20" 
+                className="absolute -bottom-2 left-0 w-full h-4 text-blue-600/30"
+                initial={{ pathLength: 0 }}
+                whileInView={{ pathLength: 1 }}
+                transition={{ duration: 1, delay: 0.5 }}
+              >
+                <path d="M5 15 Q 150 5 295 15" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+              </motion.svg>
+            </span>
+            <br />
+            <span className="text-blue-600 italic">Attention.</span>
           </h2>
         </div>
         
-        <div className="space-y-6 text-zinc-500 text-lg leading-relaxed font-medium relative">
+        <div className="space-y-8 text-zinc-600 text-xl leading-relaxed font-medium relative">
+          <div className="absolute -left-6 top-0 bottom-0 w-[4px] bg-gradient-to-b from-blue-600 to-transparent rounded-full opacity-20" />
           <p className="relative z-10">
             With over 5 years of experience in the creator economy, I've mastered the art of the 
-            "Visual Hook." My work isn't just about aesthetics—it's about data-driven 
+            <span className="text-zinc-900 font-bold"> "Visual Hook."</span> My work isn't just about aesthetics—it's about data-driven 
             psychology that forces a click. I don't just make thumbnails; I build gateways to your content.
           </p>
-          <div className="absolute -left-4 top-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-600/20 to-transparent" />
-          <p>
+          <p className="text-zinc-500 text-lg">
             My philosophy is simple: Every pixel must serve a purpose. Whether it's the subtle glow on a subject's face or the precise placement of a text element, everything is engineered to maximize curiosity and drive the YouTube algorithm in your favor.
           </p>
         </div>
 
-        {/* Stats Box - Refined Brutalist Style */}
+        {/* Interactive Signature/Badge */}
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.3 }}
-          className="relative"
+          whileHover={{ scale: 1.05, rotate: -2 }}
+          className="inline-flex items-center gap-4 p-4 bg-zinc-900 text-white rounded-2xl shadow-2xl border border-white/10"
         >
-          <div className="absolute inset-0 bg-black translate-x-2 translate-y-2 rounded-3xl -z-10 opacity-5" />
-          <div className="p-10 bg-white text-black rounded-3xl border border-black/10 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-10 relative z-10">
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Experience</span>
-                <div className="text-4xl font-display font-black text-blue-600">5+<span className="text-lg ml-1">YRS</span></div>
-              </div>
-              
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Avg CTR</span>
-                <div className="text-4xl font-display font-black text-blue-600"><Counter target={15} suffix="%" /></div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Projects</span>
-                <div className="text-4xl font-display font-black text-blue-600"><Counter target={200} suffix="+" /></div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400">Views</span>
-                <div className="text-4xl font-display font-black text-blue-600"><Counter target={400} suffix="K+" /></div>
-              </div>
-            </div>
+          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+            <Sparkles size={24} />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Verified Expert</div>
+            <div className="text-sm font-black uppercase tracking-tight">Z Score Certified</div>
           </div>
         </motion.div>
 
@@ -1375,12 +1384,32 @@ const About = () => (
         </motion.div>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        whileInView={{ opacity: 1, scale: 1 }}
-        viewport={{ once: true }}
-        className="relative group"
-      >
+      <div className="relative">
+        {/* Floating Stats Cards */}
+        <motion.div 
+          initial={{ opacity: 0, x: -30 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          className="absolute -top-10 -left-10 z-20 bg-white p-6 rounded-3xl shadow-2xl border border-black/5 hidden md:block"
+        >
+          <div className="text-3xl font-black text-blue-600"><Counter target={15} suffix="%" /></div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Avg CTR Boost</div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, x: 30 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          className="absolute -bottom-10 -right-10 z-20 bg-zinc-900 text-white p-6 rounded-3xl shadow-2xl border border-white/10 hidden md:block"
+        >
+          <div className="text-3xl font-black text-blue-600"><Counter target={200} suffix="+" /></div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Projects Done</div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          className="relative group"
+        >
         {/* Scrapbook Frame */}
         <div className="absolute -inset-6 bg-zinc-50 border border-black/5 rounded-[3rem] -rotate-2 -z-10" />
         <div className="absolute -inset-2 bg-white border border-black/10 rounded-[2.5rem] rotate-1 -z-10 shadow-xl" />
@@ -1414,7 +1443,7 @@ const About = () => (
               <div className="flex -space-x-2">
                 {[1,2,3].map(i => (
                   <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-zinc-200 overflow-hidden">
-                    <img src={`https://i.pravatar.cc/100?img=${i+10}`} alt="avatar" className="w-full h-full object-cover" loading="lazy" />
+                    <img src={`https://i.pravatar.cc/100?img=${i+10}`} alt="avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                   </div>
                 ))}
               </div>
@@ -1425,9 +1454,11 @@ const About = () => (
         {/* Push Pin Decoration */}
         <PushPin className="absolute -top-4 left-1/2 -translate-x-1/2 rotate-[-10deg] scale-125 z-20" color="#ef4444" />
       </motion.div>
+      </div>
     </div>
   </section>
-);
+  );
+};
 
 const WhyMe = () => (
   <section className="section-padding px-6 max-w-7xl mx-auto overflow-hidden relative">
@@ -1826,37 +1857,35 @@ const Reviews = () => (
             return (
               <motion.div
                 key={review.id}
-                initial={{ opacity: 0, scale: 0.8, rotate: 0, y: 50 }}
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
                 whileInView={{ 
                   opacity: 1, 
-                  scale: 1, 
-                  rotate: rotations[i % rotations.length],
-                  y: [0, -15, 0]
+                  y: 0,
+                  scale: 1,
+                  rotate: rotations[i % rotations.length]
                 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ 
-                  delay: i * 0.2, 
-                  duration: 0.8,
+                  delay: i * 0.1, 
+                  duration: 0.6,
                   type: "spring",
-                  stiffness: 100,
-                  y: {
-                    repeat: Infinity,
-                    duration: 4 + i,
-                    ease: "easeInOut",
-                    delay: i * 0.5
-                  }
+                  stiffness: 120,
+                  damping: 12
                 }}
                 whileHover={{ 
                   scale: 1.05, 
-                  rotate: 0, 
-                  zIndex: 30,
+                  rotate: 0,
                   y: -10,
-                  transition: { duration: 0.3 }
+                  zIndex: 50,
+                  transition: { duration: 0.2 }
                 }}
-                className={`relative p-8 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl max-w-sm mx-auto ${offsets[i % offsets.length]} group hover:z-30 transition-all cursor-default`}
+                className={`relative p-8 bg-white rounded-[2.5rem] shadow-xl border border-black/5 group hover:shadow-2xl transition-all duration-300 ${offsets[i % offsets.length]} cursor-default`}
               >
-                <PushPin color={pinColors[i % pinColors.length]} />
-                
+                {/* Pin Decoration */}
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
+                  <PushPin color={pinColors[i % pinColors.length]} className="scale-75" />
+                </div>
+
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <motion.span 
@@ -1900,11 +1929,14 @@ const Reviews = () => (
                     </div>
                   </div>
 
-                  <p className="text-zinc-500 text-sm leading-relaxed font-medium group-hover:text-zinc-700 transition-colors">
-                    {review.text}
-                  </p>
+                  <div className="relative">
+                    <Quote className="absolute -top-2 -left-2 text-blue-600/10 w-12 h-12 -z-10" />
+                    <p className="text-zinc-500 text-sm leading-relaxed font-medium group-hover:text-zinc-700 transition-colors italic">
+                      "{review.text}"
+                    </p>
+                  </div>
 
-                  <div className="pt-4 flex items-center gap-4">
+                  <div className="pt-4 flex items-center gap-4 border-t border-black/5">
                     <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-zinc-50 group-hover:border-orange-200 transition-colors">
                       <img 
                         src={review.image} 
@@ -2267,7 +2299,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" loading="lazy" />
+                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Instagram size={16} className="text-purple-600" />
@@ -2315,7 +2347,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" loading="lazy" />
+                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Video size={16} className="text-black" />
@@ -2363,7 +2395,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" loading="lazy" />
+                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Palette size={16} className="text-blue-600" />
@@ -2411,7 +2443,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" loading="lazy" />
+                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Twitter size={16} className="text-black" />

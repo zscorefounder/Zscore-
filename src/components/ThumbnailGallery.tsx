@@ -40,6 +40,7 @@ import { deleteDoc, doc, updateDoc, limit, startAfter, getDocs, serverTimestamp 
 import { GoogleGenAI, Type } from "@google/genai";
 import { ConfirmModal } from './ConfirmModal';
 import { useAdmin } from '../hooks/useAdmin';
+import { useFirestoreStatus } from '../hooks/useFirestoreStatus';
 import { toast } from 'sonner';
 
 interface Thumbnail {
@@ -129,7 +130,20 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const pinColors = ["#FF6321", "#3B82F6", "#8B5CF6", "#10B981"];
+
+  console.log(`Rendering ThumbnailItem: ${thumb.title}, isLoaded: ${isLoaded}`);
+
+  useEffect(() => {
+    if (imgRef.current?.complete) {
+      setIsLoaded(true);
+    }
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 5000); // 5s fallback
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -141,8 +155,8 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: 30 }}
-      whileInView={{ 
+      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+      animate={{ 
         opacity: 1, 
         scale: 1, 
         rotate: [-1, 1, -0.5, 0.5][i % 4],
@@ -155,9 +169,8 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
         y: -5,
         transition: { duration: 0.2 }
       }}
-      viewport={{ once: true, margin: "100px" }}
       transition={{ delay: (i % 6) * 0.05, duration: 0.4, ease: "easeOut" }}
-      className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-2rem)] lg:w-[calc(50%-2.5rem)] max-w-lg mx-auto group hover:z-30 transition-all cursor-default"
+      className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full max-w-lg mx-auto group hover:z-30 transition-all cursor-default"
     >
       <PushPin color={pinColors[i % pinColors.length]} />
       
@@ -189,6 +202,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
             </div>
           )}
             <motion.img 
+              ref={imgRef}
               src={thumb.imageUrl} 
               alt={thumb.title} 
               initial={{ opacity: 0 }}
@@ -201,7 +215,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
               }}
               className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110"
               referrerPolicy="no-referrer"
-              loading={i < 4 ? "eager" : "lazy"}
+              loading={i < 8 ? "eager" : "lazy"}
             />
           
           <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-30">
@@ -262,6 +276,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
 };
 
 export const ThumbnailGallery = () => {
+  const isConnected = useFirestoreStatus();
   const [thumbnails, setThumbnails] = useState<Thumbnail[]>([]);
   const { isAdmin } = useAdmin();
   const [showForm, setShowForm] = useState(false);
@@ -276,6 +291,7 @@ export const ThumbnailGallery = () => {
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -330,12 +346,21 @@ export const ThumbnailGallery = () => {
     }, 100);
     return () => clearTimeout(timer);
   }, [activeFilter]);
+  useEffect(() => {
+    mouseX.set(0);
+  }, [thumbnails, activeFilter]);
 
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    console.log('Current thumbnails state:', thumbnails.length, thumbnails);
+  }, [thumbnails]);
+
   const fetchThumbnails = async (isInitial = false, force = false) => {
+    console.log(`Fetching thumbnails: initial=${isInitial}, force=${force}, filter=${activeFilter}`);
     if (isInitial) {
       setLoading(true);
+      if (force) setIsRefreshing(true);
       setLastDoc(null);
       setHasMore(true);
       setError(null);
@@ -371,6 +396,7 @@ export const ThumbnailGallery = () => {
         // Cache the first page of thumbnails for each category
         const cacheKey = `thumbnails_v3_${activeFilter}_initial`;
         newThumbnails = await getDocsCached(q, cacheKey, force) as Thumbnail[];
+        console.log(`Fetched ${newThumbnails.length} thumbnails for ${activeFilter}`);
         
         setHasMore(newThumbnails.length >= PAGE_SIZE);
       } else {
@@ -408,24 +434,14 @@ export const ThumbnailGallery = () => {
           toast.error("Network issue or limit reached. Using offline data.");
         } else if (msg.includes('index') || msg.includes('composite')) {
           setError("Database index required. Please contact admin.");
-          console.error("Firestore Index Error. You may need to create a composite index for category + createdAt.");
-        } else if (msg.includes('permission-denied')) {
-          setError("Permission denied. Please check security rules.");
-        } else if (msg.includes('could not reach cloud firestore backend') || msg.includes('backend didn\'t respond')) {
-          setError("Connection error. Please check your internet or refresh.");
-          toast.error("Could not reach the database. Retrying in background...");
         } else {
           setError("Failed to load thumbnails. Please try again.");
         }
       }
-      try {
-        handleFirestoreError(err, OperationType.LIST, 'thumbnails');
-      } catch (e) {
-        // Error already handled
-      }
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -665,6 +681,7 @@ export const ThumbnailGallery = () => {
         t.category?.toLowerCase().includes(query)
       );
     }
+    console.log(`Filtered thumbnails count: ${filtered.length}`);
     return filtered;
   }, [thumbnails, activeFilter, searchQuery]);
 
@@ -850,7 +867,7 @@ export const ThumbnailGallery = () => {
                     </label>
                     {image && (
                       <div className="w-32 h-32 rounded-2xl overflow-hidden border border-black/5 relative group">
-                        <img src={image} alt="Preview" className="w-full h-full object-cover" loading="lazy" />
+                        <img src={image} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                         <button 
                           type="button"
                           onClick={() => setImage(null)}
@@ -937,9 +954,29 @@ export const ThumbnailGallery = () => {
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
       />
 
+      {/* Offline Warning */}
+      {!isConnected && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-3 text-orange-700"
+        >
+          <AlertCircle size={20} />
+          <div className="text-xs font-bold uppercase tracking-widest">
+            Database is currently offline. Showing cached data if available.
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="ml-auto px-4 py-2 bg-orange-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-orange-700 transition-all"
+          >
+            Reconnect
+          </button>
+        </motion.div>
+      )}
+
       {/* Search and Filters */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-12">
-        <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+        <div className="flex flex-wrap gap-2 justify-center md:justify-start items-center">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
@@ -959,6 +996,17 @@ export const ThumbnailGallery = () => {
               )}
             </button>
           ))}
+          
+          <button
+            onClick={() => fetchThumbnails(true, true)}
+            disabled={loading || isRefreshing}
+            className={`p-2 rounded-full bg-white border border-black/5 text-zinc-400 hover:text-blue-600 hover:border-blue-600/20 transition-all shadow-sm ml-2 ${
+              isRefreshing ? 'animate-spin' : ''
+            }`}
+            title="Refresh Gallery"
+          >
+            <Loader2 size={14} />
+          </button>
         </div>
 
         <div className="relative w-full md:w-64">
@@ -988,51 +1036,68 @@ export const ThumbnailGallery = () => {
           ))}
         </div>
       ) : filteredThumbnails.length === 0 ? (
-        <div className="bg-zinc-50 border border-zinc-100 rounded-[2.5rem] p-20 text-center mb-12">
-          <div className="w-20 h-20 bg-white shadow-sm text-zinc-300 rounded-full flex items-center justify-center mx-auto mb-8">
-            <ImageIcon size={40} />
-          </div>
-          <h3 className="text-2xl font-bold text-zinc-900 mb-3">No thumbnails found</h3>
-          <p className="text-zinc-500 mb-10 max-w-md mx-auto">The gallery is currently empty or no thumbnails match this category. {isAdmin && "Start adding some using the plus button above!"}</p>
-          {isAdmin && (
-            <div className="flex flex-col md:flex-row items-center justify-center gap-4">
-              <button 
-                onClick={() => setShowForm(true)}
-                className="px-10 py-4 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center gap-2"
-              >
-                <Plus size={20} />
-                Add First Thumbnail
-              </button>
-              <button 
-                onClick={async () => {
-                  const toastId = toast.loading('Seeding sample thumbnails...');
-                  try {
-                    const samples = [
-                      { title: "Gaming Thumbnail 1", category: "Gaming", stats: "10K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
-                      { title: "Finance Thumbnail 1", category: "Finance", stats: "5K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
-                      { title: "Tech Thumbnail 1", category: "Tech", stats: "20K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` }
-                    ];
-                    for (const sample of samples) {
-                      await addDoc(collection(db, 'thumbnails'), {
-                        ...sample,
-                        createdAt: serverTimestamp()
-                      });
-                    }
-                    clearCache('thumbnails_v3_All_initial');
-                    fetchThumbnails(true, true);
-                    toast.success('Sample thumbnails seeded!', { id: toastId });
-                  } catch (error) {
-                    toast.error('Failed to seed thumbnails', { id: toastId });
-                    handleFirestoreError(error, OperationType.CREATE, 'thumbnails');
-                  }
-                }}
-                className="px-10 py-4 bg-white border border-black/10 text-black rounded-full font-bold hover:bg-zinc-50 transition-all shadow-sm flex items-center gap-2"
-              >
-                <Sparkles size={20} className="text-orange-500" />
-                Seed Sample Data
-              </button>
+        <div className="bg-white border border-black/5 rounded-[3rem] p-20 text-center mb-12 shadow-2xl shadow-black/5 relative overflow-hidden">
+          <div className="absolute inset-0 noise-bg opacity-[0.03]" />
+          <div className="relative z-10">
+            <div className="w-24 h-24 bg-zinc-50 text-zinc-300 rounded-full flex items-center justify-center mx-auto mb-8 border border-black/5">
+              <ImageIcon size={48} />
             </div>
-          )}
+            <h3 className="text-3xl font-black text-zinc-900 mb-4 tracking-tighter uppercase">No thumbnails found</h3>
+            <p className="text-zinc-500 mb-12 max-w-md mx-auto font-medium text-lg leading-relaxed">
+              The gallery is currently empty or no thumbnails match your search. 
+              {isAdmin && " As an admin, you can populate it with sample data or upload your own work."}
+            </p>
+            
+            <div className="flex flex-col md:flex-row items-center justify-center gap-6">
+              {isAdmin ? (
+                <>
+                  <button 
+                    onClick={() => setShowForm(true)}
+                    className="px-10 py-5 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 transition-all shadow-2xl shadow-blue-600/20 flex items-center gap-3 group"
+                  >
+                    <Plus size={20} className="group-hover:rotate-90 transition-transform duration-500" />
+                    Upload Your First Project
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      const toastId = toast.loading('Seeding sample thumbnails...');
+                      try {
+                        const samples = [
+                          { title: "Gaming Thumbnail 1", category: "Gaming", stats: "10K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
+                          { title: "Finance Thumbnail 1", category: "Finance", stats: "5K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
+                          { title: "Tech Thumbnail 1", category: "Tech", stats: "20K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` }
+                        ];
+                        for (const sample of samples) {
+                          await addDoc(collection(db, 'thumbnails'), {
+                            ...sample,
+                            createdAt: serverTimestamp()
+                          });
+                        }
+                        clearCache('thumbnails_v3_All_initial');
+                        fetchThumbnails(true, true);
+                        toast.success('Sample thumbnails seeded!', { id: toastId });
+                      } catch (error) {
+                        toast.error('Failed to seed thumbnails', { id: toastId });
+                        handleFirestoreError(error, OperationType.CREATE, 'thumbnails');
+                      }
+                    }}
+                    className="px-10 py-5 bg-white border border-black/10 text-black rounded-full font-bold hover:bg-zinc-50 transition-all shadow-sm flex items-center gap-3"
+                  >
+                    <Sparkles size={20} className="text-orange-500" />
+                    Seed Sample Data
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => fetchThumbnails(true, true)}
+                  className="px-10 py-5 bg-black text-white rounded-full font-bold hover:bg-zinc-800 transition-all shadow-2xl flex items-center gap-3"
+                >
+                  <RefreshCw size={20} />
+                  Refresh Gallery
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-12 relative">
@@ -1053,6 +1118,11 @@ export const ThumbnailGallery = () => {
               style={{ x: smoothX }}
               className="flex gap-12 px-12 items-center"
             >
+              {filteredThumbnails.length === 0 && !loading && (
+                <div className="w-full text-center py-20 text-zinc-400 font-medium">
+                  No thumbnails found for this category.
+                </div>
+              )}
               {filteredThumbnails.map((thumb, i) => (
                 <div key={thumb.id} className="min-w-[300px] md:min-w-[450px]">
                   <ThumbnailItem 
