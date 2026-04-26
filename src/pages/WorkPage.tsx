@@ -28,6 +28,7 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  RotateCw,
   Image as ImageIcon
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -49,7 +50,8 @@ import {
   limit,
   getDocsCached,
   clearCache,
-  clearAllCache
+  clearAllCache,
+  isQuotaExceededError
 } from '../firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { toast } from 'sonner';
@@ -324,10 +326,15 @@ const HeroSection = () => {
         const data = await getDocsCached(q, 'hero_thumbnails_limit_10');
         setThumbnails(data);
       } catch (error) {
+        if (isQuotaExceededError(error)) {
+          setQuotaExceeded(true);
+          return;
+        }
         if (error instanceof Error) {
           const msg = error.message.toLowerCase();
-          if (msg.includes('quota-exceeded') || msg.includes('resource-exhausted') || msg.includes('quota exceeded')) {
+          if (msg.includes('timed out') || msg.includes('network')) {
             setQuotaExceeded(true);
+            return;
           }
         }
         handleFirestoreError(error, OperationType.LIST, 'hero_thumbnails');
@@ -374,7 +381,8 @@ const HeroSection = () => {
         }, ...prev]);
         
         // Clear cache
-        clearCache('hero_thumbnails_limit_10');
+        clearCache('hero');
+        clearCache('hero_thumbnails');
         
         toast.success('Hero thumbnail uploaded!', { id: toastId });
         setIsUploading(false);
@@ -452,9 +460,6 @@ const HeroSection = () => {
               Get Started for Free
               <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </button>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-              Note: Thumbnails may take a moment to load.
-            </p>
 
             {/* Quota Exceeded Overlay */}
             <AnimatePresence>
@@ -723,11 +728,13 @@ const HangingSection = () => {
       setCards(posts);
     } catch (error) {
       console.error("Error fetching random posts:", error);
+      if (isQuotaExceededError(error)) {
+        setQuotaExceeded(true);
+        return;
+      }
       if (error instanceof Error) {
         const msg = error.message.toLowerCase();
-        if (msg.includes('quota-exceeded') || msg.includes('resource-exhausted') || msg.includes('quota exceeded')) {
-          setQuotaExceeded(true);
-        } else if (msg.includes('permission-denied')) {
+        if (msg.includes('permission-denied')) {
           setError("Permission denied.");
         } else {
           setError("Failed to load posts.");
@@ -782,15 +789,13 @@ const HangingSection = () => {
         }
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: [
-            {
-              parts: [
-                { text: "Analyze this image and provide a short, catchy, high-conversion title (1-3 words) and a very brief, punchy description (under 10 words) suitable for a polaroid-style project card. The tone should be professional yet creative. Return in JSON format with 'title' and 'desc' keys." },
-                { inlineData: { data: base64Content, mimeType: file.type } }
-              ]
-            }
-          ],
+          model: "gemini-flash-latest",
+          contents: {
+            parts: [
+              { text: "Analyze this image and provide a short, catchy, high-conversion title (1-3 words) and a very brief, punchy description (under 10 words) suitable for a polaroid-style project card. The tone should be professional yet creative. Return in JSON format with 'title' and 'desc' keys." },
+              { inlineData: { data: base64Content, mimeType: file.type } }
+            ]
+          },
           config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -825,8 +830,9 @@ const HangingSection = () => {
             createdAt: new Date()
           }, ...prev]);
           
-          // Clear cache
-          clearCache('random_posts_limit_10');
+          // Clear cache thoroughly
+          clearCache('random');
+          clearCache('random_posts');
           
           toast.success('Post added!', { id: toastId });
         } catch (error) {
@@ -882,8 +888,9 @@ const HangingSection = () => {
         createdAt: new Date()
       }, ...prev]);
       
-      // Clear cache
-      clearCache('random_posts_limit_10');
+      // Clear cache thoroughly
+      clearCache('random');
+      clearCache('random_posts');
       
       setManualTitle('');
       setManualDesc('');
@@ -931,9 +938,6 @@ const HangingSection = () => {
             </AnimatePresence>
           </h2>
           <p className="text-zinc-500 max-w-2xl mx-auto text-sm mb-2">A collection of visuals designed to break the pattern and drive engagement.</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-8">
-            Note: Thumbnails may take a moment to load.
-          </p>
 
           {/* Quota Exceeded Overlay */}
           <AnimatePresence>
@@ -1020,15 +1024,14 @@ const HangingSection = () => {
                       const toastId = toast.loading('Seeding sample posts...');
                       try {
                         const samples = [
-                          { title: "Gaming Setup", desc: "Minimalist aesthetic for pro gamers" },
-                          { title: "Tech Review", desc: "Deep dive into the latest gadgets" },
-                          { title: "Vlog Style", desc: "Dynamic storytelling for creators" }
+                          { title: "I Spent 100 Days in a Secret Bunker", desc: "A high-intensity gaming layout with custom typography.", image: "https://i.ibb.co/5Xd8rDDZ/image.png" },
+                          { title: "The Crypto Crash: Why Everything is Falling", desc: "Finance-focused design with clean data visualization.", image: "https://i.ibb.co/V0nZTDcZ/image.png" },
+                          { title: "AI is Replacing Designers (The Truth)", desc: "Futuristic tech aesthetic with neon accents.", image: "https://i.ibb.co/rKFrLL2S/image.png" }
                         ];
                         
                         for (const sample of samples) {
                           const newCardData = {
                             ...sample,
-                            image: `https://picsum.photos/seed/${Math.random()}/800/450`,
                             rotate: Math.random() * 20 - 10,
                             y: Math.random() * 30,
                             createdAt: serverTimestamp()
@@ -1132,51 +1135,7 @@ const HangingSection = () => {
             {isInitialLoad ? (
               <HangingSkeleton />
             ) : !error && cards.length === 0 ? (
-              <div className="text-center py-20 bg-white/50 backdrop-blur-sm rounded-[2.5rem] border border-dashed border-black/10 w-full max-w-2xl">
-                <div className="w-16 h-16 bg-white shadow-sm text-zinc-300 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <ImageIcon size={32} />
-                </div>
-                <h3 className="text-xl font-bold text-zinc-900 mb-2">No posts yet</h3>
-                <p className="text-zinc-500 mb-8 max-w-md mx-auto text-sm">This section is currently empty. If you are an admin, you can add new posts using the buttons above.</p>
-                {isAdmin && (
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-4">
-                    <button 
-                      onClick={() => setShowManualForm(true)}
-                      className="px-8 py-3 bg-black text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-xl"
-                    >
-                      Add First Post
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        const toastId = toast.loading('Seeding sample posts...');
-                        try {
-                          const samples = [
-                            { title: "Creative Layout", desc: "Exploring new visual hierarchies for modern interfaces.", image: `https://picsum.photos/seed/${Math.random()}/800/600`, rotate: -5, y: 0 },
-                            { title: "Color Theory", desc: "How vibrant palettes drive user engagement and brand recall.", image: `https://picsum.photos/seed/${Math.random()}/800/600`, rotate: 3, y: 20 },
-                            { title: "Typography Study", desc: "The impact of variable fonts on responsive design systems.", image: `https://picsum.photos/seed/${Math.random()}/800/600`, rotate: -2, y: -10 }
-                          ];
-                          for (const sample of samples) {
-                            await addDoc(collection(db, 'random_posts'), {
-                              ...sample,
-                              createdAt: serverTimestamp()
-                            });
-                          }
-                          clearCache('random_posts_limit_10');
-                          window.location.reload(); // Refresh to show new posts
-                          toast.success('Sample posts seeded!', { id: toastId });
-                        } catch (error) {
-                          toast.error('Failed to seed posts', { id: toastId });
-                          handleFirestoreError(error, OperationType.CREATE, 'random_posts');
-                        }
-                      }}
-                      className="px-8 py-3 bg-white border border-black/10 text-black rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition-all shadow-sm flex items-center gap-2"
-                    >
-                      <Sparkles size={14} className="text-orange-500" />
-                      Seed Sample Data
-                    </button>
-                  </div>
-                )}
-              </div>
+              null
             ) : (
               <AnimatePresence>
                 {cards.map((card, i) => {
@@ -1251,6 +1210,7 @@ const HangingSection = () => {
 };
 
 const WorkPage = () => {
+  const { isAdmin } = useAdmin();
   return (
     <div className="min-h-screen bg-[#F2F2F2] text-[#1A1A1A] selection:bg-orange-500 selection:text-white font-sans overflow-x-hidden">
       <Helmet>
@@ -1282,6 +1242,24 @@ const WorkPage = () => {
       </nav>
 
       <HeroSection />
+      
+      {isAdmin && (
+        <div className="fixed bottom-8 right-8 z-[100] flex flex-col gap-3">
+          <button 
+            onClick={() => {
+              clearCache();
+              toast.success('Cache cleared. Reloading...');
+              setTimeout(() => window.location.reload(), 1000);
+            }}
+            className="flex items-center gap-2 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-2xl shadow-red-600/20 hover:bg-red-700 transition-all hover:scale-105 active:scale-95 group"
+            title="Clear all local cache and reload"
+          >
+            <RotateCw size={18} className="group-hover:rotate-180 transition-transform duration-700" />
+            Hard Reset Cache
+          </button>
+        </div>
+      )}
+
       <HangingSection />
 
       <main className="pb-20 px-6 max-w-6xl mx-auto relative z-10">

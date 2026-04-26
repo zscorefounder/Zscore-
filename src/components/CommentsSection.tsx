@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useInView } from 'motion/react';
 import { Star, Send, User, MessageSquare, AlertCircle, Image as ImageIcon, X } from 'lucide-react';
 import { ZSpinner } from './ZLoading';
-import { db, collection, addDoc, query, orderBy, serverTimestamp, handleFirestoreError, OperationType, limit, getDocsCached } from '../firebase';
+import { db, collection, addDoc, query, orderBy, serverTimestamp, handleFirestoreError, OperationType, limit, getDocsCached, isQuotaExceededError } from '../firebase';
 import { useRef } from 'react';
 
 interface Comment {
@@ -80,6 +80,10 @@ export const CommentsSection = () => {
         const docs = await getDocsCached(q, 'comments_limit_20') as Comment[];
         setComments(docs);
       } catch (err) {
+        if (isQuotaExceededError(err)) {
+          console.warn("CommentsSection: Quota exceeded, using fallback via getDocsCached");
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'comments');
       }
     };

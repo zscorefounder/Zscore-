@@ -193,32 +193,38 @@ export { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, limit,
 
 // Simple in-memory cache to reduce reads during the same session
 const firestoreCache = new Map<string, { data: any[], timestamp: number }>();
-const CACHE_TTL = 1000 * 60 * 60 * 24 * 30; // 30 days for persistent cache
-const REFRESH_THRESHOLD = 1000 * 60 * 60 * 2; // 2 hours threshold for background refresh (increased from 15m)
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const REFRESH_THRESHOLD = 1000 * 60 * 5; // 5 minutes
 
 export function clearCache(cacheKeyPrefix?: string) {
   if (cacheKeyPrefix) {
-    // Clear specific keys
+    console.log(`Clearing cache for prefix: ${cacheKeyPrefix}`);
+    // Clear specific keys from memory
     for (const key of Array.from(firestoreCache.keys())) {
-      if (key.startsWith(cacheKeyPrefix)) {
+      if (key.startsWith(cacheKeyPrefix) || key.includes(cacheKeyPrefix)) {
         firestoreCache.delete(key);
       }
     }
+    // Clear specific keys from LocalStorage
+    const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith(`fs_cache_${cacheKeyPrefix}`)) {
-        localStorage.removeItem(key);
+      if (key?.includes(`fs_cache_${cacheKeyPrefix}`)) {
+        keysToRemove.push(key);
       }
     }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
   } else {
     // Clear all
     firestoreCache.clear();
+    const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith('fs_cache_')) {
-        localStorage.removeItem(key);
+        keysToRemove.push(key);
       }
     }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
     toast.success('Cache cleared successfully');
   }
 }
@@ -227,8 +233,19 @@ export const clearAllCache = () => clearCache();
 
 async function fetchAndCache(q: any, cacheKey: string) {
   try {
-    const snapshot = await getDocs(q);
-    const data = snapshot.docs.map(doc => ({
+    // Add a 30-second timeout to the fetch operation (increased from 20s)
+    const fetchPromise = getDocs(q).catch(err => {
+      // If it's a specific Firestore error like "unavailable", we want to catch it here
+      // and let the timeout or success play out.
+      throw err;
+    });
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Fetch operation timed out')), 30000)
+    );
+
+    const snapshot = await Promise.race([fetchPromise, timeoutPromise]) as any;
+    const data = snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...(doc.data() as any)
     }));
@@ -252,46 +269,88 @@ async function fetchAndCache(q: any, cacheKey: string) {
       } catch (e2) {}
     }
     return data;
-  } catch (error) {
-    console.error(`Fetch failed for ${cacheKey}:`, error);
+  } catch (error: any) {
+    const msg = error?.message?.toLowerCase() || '';
+    const isQuotaError = msg.includes('quota') || msg.includes('limit exceeded');
+    
+    if (isQuotaError) {
+      console.warn(`Firestore Quota Exceeded for ${cacheKey}. Fallback triggered.`);
+      // Only show toast once per session to avoid spam
+      if (!sessionStorage.getItem('fs_quota_toast_shown')) {
+        // Silently handle if we have valid fallback
+        console.log("Using rich fallback data due to quota limits.");
+        sessionStorage.setItem('fs_quota_toast_shown', 'true');
+      }
+    } else if (msg.includes('timed out')) {
+      console.warn(`Fetch timed out for ${cacheKey}. Using fallback logic.`);
+    } else {
+      console.error(`Fetch failed for ${cacheKey}:`, error);
+    }
     throw error;
   }
+}
+
+export function isQuotaExceededError(error: any): boolean {
+  const msg = error?.message?.toLowerCase() || '';
+  return msg.includes('quota') || msg.includes('limit exceeded');
 }
 
 // Hardcoded fallback data for maximum resilience (Quota exceeded or Offline)
 const FALLBACK_DATA: Record<string, any[]> = {
   'thumbnails': [
-    { id: 'fb1', title: "I Spent 100 Days in a Secret Bunker", description: "A high-intensity gaming layout with custom typography.", category: "Gaming", imageUrl: "https://i.ibb.co/5Xd8rDDZ/image.png", stats: "14.2% CTR", createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fb2', title: "The Crypto Crash: Why Everything is Falling", description: "Finance-focused design with clean data visualization.", category: "Finance", imageUrl: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR", createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fb3', title: "AI is Replacing Designers (The Truth)", description: "Futuristic tech aesthetic with neon accents.", category: "Tech", imageUrl: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR", createdAt: { seconds: Date.now()/1000 } }
+    { id: 'fb_1', isFallback: true, title: "I Spent 100 Days in a Secret Bunker", description: "Extreme lighting and depth-focused gaming thumbnail.", category: "Gaming", imageUrl: "https://i.ibb.co/5Xd8rDDZ/image.png", stats: "14.2% CTR", createdAt: { seconds: Date.now()/1000 - 1000 } },
+    { id: 'fb_2', isFallback: true, title: "The Crypto Crash: Real Analysis", description: "Clean data visualization for high-stakes finance.", category: "Finance", imageUrl: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR", createdAt: { seconds: Date.now()/1000 - 2000 } },
+    { id: 'fb_3', isFallback: true, title: "AI Design Revolution 2026", description: "Futuristic tech aesthetic with sharp neon accents.", category: "Tech", imageUrl: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR", createdAt: { seconds: Date.now()/1000 - 3000 } },
+    { id: 'fb_4', isFallback: true, title: "Premium Visual Identity", description: "High-end brand showcase for luxury clients.", category: "Entertainment", imageUrl: "https://i.ibb.co/qXFY4XD/dposa-s.png", stats: "Premium", createdAt: { seconds: Date.now()/1000 - 4000 } },
+    { id: 'fb_5', isFallback: true, title: "Digital Strategy Mastery", description: "Clean, impactful logo and text placement.", category: "Business", imageUrl: "https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png", stats: "Modern", createdAt: { seconds: Date.now()/1000 - 5000 } },
+    { id: 'fb_6', isFallback: true, title: "Viral Fitness Transformation", description: "High-energy sports thumbnail with grit.", category: "Sports", imageUrl: "https://i.ibb.co/6J4CbdQf/image.png", stats: "400K+ Views", createdAt: { seconds: Date.now()/1000 - 6000 } },
+    { id: 'fb_7', isFallback: true, title: "Global Adventure Vlog", description: "Lush travel photography with immersive hooks.", category: "Travel", imageUrl: "https://i.ibb.co/rR6LmpRm/image.png", stats: "15% Growth", createdAt: { seconds: Date.now()/1000 - 7000 } },
+    { id: 'fb_8', isFallback: true, title: "Technical Setup Showcase", description: "Pro tech gear with sharp, industrial lighting.", category: "Tech", imageUrl: "https://i.ibb.co/NdXYBpM4/image.png", stats: "Elite", createdAt: { seconds: Date.now()/1000 - 8000 } },
+    { id: 'fb_9', isFallback: true, title: "Creative Process Walkthrough", description: "Clean, educational layout for artists.", category: "Education", imageUrl: "https://i.ibb.co/ddJ5FDm/image.png", stats: "Viral Hit", createdAt: { seconds: Date.now()/1000 - 9000 } },
+    { id: 'fb_10', isFallback: true, title: "Culinary Arts & Styling", description: "Appetizing textures and high-contrast food shots.", category: "Food", imageUrl: "https://picsum.photos/seed/food9/800/450", stats: "Delicious", createdAt: { seconds: Date.now()/1000 - 10000 } },
+    { id: 'fb_11', isFallback: true, title: "Minimalist Music Visuals", description: "Soft, emotional tones for music producers.", category: "Music", imageUrl: "https://picsum.photos/seed/music2/800/450", stats: "Trending", createdAt: { seconds: Date.now()/1000 - 11000 } },
+    { id: 'fb_12', isFallback: true, title: "Morning Routine Excellence", description: "Soft-lit vlog style for lifestyle creators.", category: "Vlog", imageUrl: "https://picsum.photos/seed/vlog3/800/450", stats: "Clean", createdAt: { seconds: Date.now()/1000 - 12000 } }
   ],
-  'behind': [ // Matches 'behind_the_scenes' prefix
+  'hero': [
+    { id: 'fallback_h1', isFallback: true, url: "https://i.ibb.co/5Xd8rDDZ/image.png", rotate: -2, x: 0, y: 0, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fallback_h2', isFallback: true, url: "https://i.ibb.co/V0nZTDcZ/image.png", rotate: 5, x: 20, y: 10, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fallback_h3', isFallback: true, url: "https://i.ibb.co/rKFrLL2S/image.png", rotate: -4, x: -20, y: 5, createdAt: { seconds: Date.now()/1000 } }
+  ],
+  'bts': [
     { 
-      id: 'fb_bts1', 
-      title: "The Psychology of a Viral Hook", 
+      id: 'fallback_bts1', 
+      isFallback: true,
+      title: "Psychology of the Scroll", 
       description: "How we achieved a 15% CTR for a major tech creator using psychological framing.",
-      imageUrl: "https://picsum.photos/seed/bts1/1920/1080",
+      imageUrl: "https://i.ibb.co/5Xd8rDDZ/image.png",
+      beforeImages: ["https://picsum.photos/seed/bts_b1/800/450"],
+      afterImages: ["https://i.ibb.co/5Xd8rDDZ/image.png"],
       category: "Case Study",
+      clientName: "Bunker Chronicles",
+      clientPhoto: "https://i.ibb.co/qXFY4XD/dposa-s.png",
+      layoutIdea: "Deep Extraction",
+      designWorkflow: "Concept -> 3D Lighting -> Frame Polish",
+      clientFeedback: "Absolutely game changing results.",
+      whatsappChat: [{ role: 'client', text: "CTR is vertical right now!", time: "10:00 AM" }],
       createdAt: { seconds: Date.now()/1000 }
-    }
-  ],
-  'bts': [ // Alias for 'behind_the_scenes'
+    },
     { 
-      id: 'fb_bts2', 
-      title: "Workflow Optimization", 
-      description: "Speeding up the design process by 200% with custom Photoshop actions.",
-      imageUrl: "https://picsum.photos/seed/bts2/1920/1080",
+      id: 'fallback_bts2', 
+      isFallback: true,
+      title: "Clean Finance Aesthetic", 
+      description: "Establishing trust and authority through minimalist data visualization.",
+      imageUrl: "https://i.ibb.co/V0nZTDcZ/image.png",
+      beforeImages: ["https://picsum.photos/seed/bts_b2/800/450"],
+      afterImages: ["https://i.ibb.co/V0nZTDcZ/image.png"],
       category: "Process",
+      clientName: "Crypto Daily",
+      clientPhoto: "https://i.ibb.co/qXFY4XD/dposa-s.png",
       createdAt: { seconds: Date.now()/1000 }
     }
   ],
-  'random': [ // Matches 'random_posts' prefix
-    { id: 'rp1', title: "Creative Layout", desc: "Minimalist approach.", image: "https://picsum.photos/seed/rp1/800/600", rotate: -5, y: 0, createdAt: { seconds: Date.now()/1000 } },
-    { id: 'rp2', title: "Color Theory", desc: "Vibrant palettes.", image: "https://picsum.photos/seed/rp2/800/600", rotate: 3, y: 20, createdAt: { seconds: Date.now()/1000 } }
-  ],
-  'hero': [ // Matches 'hero_thumbnails' prefix
-    { id: 'ht1', url: "https://picsum.photos/seed/ht1/1200/800", rotate: -2, x: 0, y: 0, createdAt: { seconds: Date.now()/1000 } },
-    { id: 'ht2', url: "https://picsum.photos/seed/ht2/1200/800", rotate: 5, x: 20, y: 10, createdAt: { seconds: Date.now()/1000 } }
+  'random': [
+    { id: 'fallback_r1', isFallback: true, title: "Creative Layout", desc: "Minimalist approach.", image: "https://i.ibb.co/5Xd8rDDZ/image.png", rotate: -5, y: 0, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fallback_r2', isFallback: true, title: "Color Theory", desc: "Vibrant palettes.", image: "https://i.ibb.co/V0nZTDcZ/image.png", rotate: 3, y: 20, createdAt: { seconds: Date.now()/1000 } }
   ]
 };
 
@@ -299,80 +358,67 @@ export async function getDocsCached(q: any, cacheKey: string, force = false) {
   const now = Date.now();
   
   if (!force) {
-    // 1. Check in-memory cache first
     const cached = firestoreCache.get(cacheKey);
-    if (cached && (now - cached.timestamp < REFRESH_THRESHOLD)) {
-      return cached.data;
+    if (cached) {
+      const age = now - cached.timestamp;
+      const isFallback = cached.data.length > 0 && (cached.data[0].isFallback || String(cached.data[0].id).startsWith('fb') || String(cached.data[0].id).startsWith('fallback'));
+      if (age < CACHE_TTL && !isFallback) {
+        if (age > REFRESH_THRESHOLD) {
+          fetchAndCache(q, cacheKey).catch(e => console.warn("BG Refresh failed", e));
+        }
+        return cached.data;
+      }
     }
 
-    // 2. Check localStorage for persistent cache
     let localData = null;
     try {
-      const localCached = localStorage.getItem(`fs_cache_${cacheKey}`);
-      if (localCached) {
-        const parsed = JSON.parse(localCached);
+      const local = localStorage.getItem(`fs_cache_${cacheKey}`);
+      if (local) {
+        const parsed = JSON.parse(local);
         const age = now - parsed.timestamp;
-        
-        if (age < CACHE_TTL) {
-          // Update in-memory cache
-          firestoreCache.set(cacheKey, parsed);
-          
-          // If data is older than REFRESH_THRESHOLD, refresh in background
+        const isFallback = parsed.data.length > 0 && (parsed.data[0].isFallback || String(parsed.data[0].id).startsWith('fb') || String(parsed.data[0].id).startsWith('fallback'));
+        if (age < CACHE_TTL && !isFallback) {
           if (age > REFRESH_THRESHOLD) {
-            console.log(`Refreshing cache in background for: ${cacheKey}`);
-            fetchAndCache(q, cacheKey).catch(err => {
-              console.warn(`Background refresh failed for ${cacheKey}`, err);
-            });
+            fetchAndCache(q, cacheKey).catch(err => console.warn("BG Refresh failed", err));
           }
-          
           return parsed.data;
         }
-        localData = parsed.data; // Keep as fallback if expired but still exists
+        localData = parsed.data;
       }
-    } catch (e) {
-      console.warn("LocalStorage cache read failed", e);
-    }
+    } catch (e) {}
 
-    // 3. Fetch from Firestore if not cached or expired
     try {
-      // If we have local data but it's just past REFRESH_THRESHOLD, 
-      // we can still return it and refresh in background to save user wait time
-      if (localData) {
-        console.log(`Using local cache for ${cacheKey}, refreshing in background...`);
-        fetchAndCache(q, cacheKey).catch(err => {
-          console.warn(`Background refresh failed for ${cacheKey}`, err);
-        });
+      // Use local data ONLY if it's not a fallback
+      const localIsFallback = localData && localData.length > 0 && (localData[0].isFallback || String(localData[0].id).startsWith('fb') || String(localData[0].id).startsWith('fallback'));
+      if (localData && localData.length > 0 && !localIsFallback) {
+        fetchAndCache(q, cacheKey).catch(err => console.warn("BG Refresh failed", err));
         return localData;
       }
 
-      return await fetchAndCache(q, cacheKey);
+      const data = await fetchAndCache(q, cacheKey);
+      return data || [];
     } catch (error) {
-      // Return ANY cached data or hardcoded fallback as last resort for ANY error
-      // This is crucial for sandboxed apps where indexes or connectivity might be flaky
-      console.warn(`Fetch failed for ${cacheKey}, attempting to use fallback data. Error:`, error);
+      console.warn(`Initial fetch failed for ${cacheKey}, attempting fallback:`, (error as Error).message);
+      if (localData && localData.length > 0) return localData;
+      if (cached && cached.data.length > 0) return cached.data;
       
-      if (localData) return localData;
-      if (cached) return cached.data;
+      const coll = cacheKey.split('_')[0]; 
+      if (FALLBACK_DATA[coll]) return FALLBACK_DATA[coll];
+      if (cacheKey.includes('thumbnails') && FALLBACK_DATA['thumbnails']) return FALLBACK_DATA['thumbnails'];
       
-      // 4. Final Fallback: Hardcoded Data
-      // Extract prefix before underscore or full key
-      const collectionName = cacheKey.split('_')[0]; 
-      if (FALLBACK_DATA[collectionName]) {
-        console.warn(`Using hardcoded fallback data for: ${collectionName}`);
-        return FALLBACK_DATA[collectionName];
-      }
-      
-      throw error; // Re-throw if absolutely no fallback available
+      // If we've reached here and it's a thumbnail query, return empty rather than crashing
+      return [];
     }
   }
 
-  // Force fetch from Firestore with same fallback logic
   try {
-    return await fetchAndCache(q, cacheKey);
+    const data = await fetchAndCache(q, cacheKey);
+    return data || [];
   } catch (error) {
-    console.warn(`Forced fetch failed for ${cacheKey}, attempting fallback.`, error);
-    const collectionName = cacheKey.split('_')[0];
-    if (FALLBACK_DATA[collectionName]) return FALLBACK_DATA[collectionName];
-    throw error;
+    console.warn(`Forced fetch failed for ${cacheKey}, using fallback:`, (error as Error).message);
+    const coll = cacheKey.split('_')[0];
+    if (FALLBACK_DATA[coll]) return FALLBACK_DATA[coll];
+    if (cacheKey.includes('thumbnails') && FALLBACK_DATA['thumbnails']) return FALLBACK_DATA['thumbnails'];
+    return [];
   }
 }

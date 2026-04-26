@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { ZSpinner, ZSkeleton } from './ZLoading';
 import { useAdmin } from '../hooks/useAdmin';
 import { useFirestoreStatus } from '../hooks/useFirestoreStatus';
-import { db, auth, handleFirestoreError, OperationType, getDocsCached, clearCache } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, getDocsCached, clearCache, isQuotaExceededError } from '../firebase';
 import { 
   collection, 
   addDoc, 
@@ -42,6 +42,7 @@ interface BTSContent {
   beforeImages?: string[];
   afterImages?: string[];
   createdAt: Timestamp;
+  isFallback?: boolean;
 }
 
 const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.5): Promise<string> => {
@@ -185,7 +186,7 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
           </div>
         </div>
 
-        <div className="aspect-video relative overflow-hidden bg-zinc-100 rounded-2xl border border-black/[0.03]">
+        <div className="aspect-video relative overflow-hidden bg-zinc-900 rounded-2xl border border-white/5 group-hover:border-blue-500/30 transition-all duration-500 shadow-2xl">
           <AnimatePresence mode="wait">
             <motion.img
               key={content.imageUrl}
@@ -194,13 +195,14 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              whileHover={{ scale: 1.1 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              className="w-full h-full object-cover transition-transform duration-1000"
+              className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
               referrerPolicy="no-referrer"
               loading="lazy"
             />
           </AnimatePresence>
+          
+          <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           
           {isAdmin && (
             <button
@@ -208,61 +210,42 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
                 e.stopPropagation();
                 handleDelete(content.id);
               }}
-              className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow-lg z-10"
+              className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur-md border border-white/10 text-red-400 rounded-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg z-10"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 px-1">
           <div className="space-y-1">
-            <h4 className="text-xl font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-blue-600/10 text-blue-600 text-[8px] font-black tracking-tighter rounded uppercase">
+                {content.category || 'Case Study'}
+              </span>
+              <span className="text-[10px] font-bold text-zinc-400 tracking-tight">Process Focused</span>
+            </div>
+            <h4 className="text-xl font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate tracking-tight">
               {content.title}
             </h4>
             {content.description && (
-              <div className="relative">
-                <p className={`text-xs text-zinc-500 leading-relaxed font-medium ${isExpanded ? '' : 'line-clamp-3'}`}>
-                  {content.description}
-                </p>
-                {content.description.length > 80 && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsExpanded(!isExpanded);
-                    }}
-                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 mt-1 uppercase tracking-widest flex items-center gap-1"
-                  >
-                    {isExpanded ? 'Show Less' : 'Read More'}
-                    <ChevronRight size={10} className={`transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
-                  </button>
-                )}
-              </div>
+              <p className="text-xs text-zinc-500 leading-snug font-medium line-clamp-2">
+                {content.description}
+              </p>
             )}
-          </div>
-          <div className="flex items-center justify-between pt-2 border-t border-black/[0.03]">
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-              {content.category || 'Case Study'}
-            </p>
-            <motion.span 
-              whileHover={{ scale: 1.1 }}
-              className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full"
-            >
-              Process
-            </motion.span>
           </div>
         </div>
 
         {/* Before/After Preview */}
         {(content.beforeImages || content.afterImages) && (
-          <div className="grid grid-cols-2 gap-3 pt-2 relative">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center z-10 border border-black/5">
-              <Sparkles size={10} className="text-blue-600" />
+          <div className="grid grid-cols-2 gap-4 pt-2 relative px-1">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-xl flex items-center justify-center z-10 border border-black/5">
+              <Sparkles size={12} className="text-blue-600 animate-pulse" />
             </div>
             {content.beforeImages && content.beforeImages.length > 0 && (
-              <div className="space-y-1">
-                <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Before</span>
-                <div className="aspect-video rounded-lg overflow-hidden border border-black/5 grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700">
+              <div className="space-y-2">
+                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-400 block px-1">Before</span>
+                <div className="aspect-video rounded-xl overflow-hidden border border-black/5 grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700">
                   <img 
                     src={content.beforeImages[0]} 
                     className="w-full h-full object-cover" 
@@ -274,9 +257,9 @@ const BTSItem = ({ content, i, isAdmin, handleDelete, setSelectedContent, setCur
               </div>
             )}
             {content.afterImages && content.afterImages.length > 0 && (
-              <div className="space-y-1">
-                <span className="text-[8px] font-bold uppercase tracking-widest text-blue-600">After</span>
-                <div className="aspect-video rounded-lg overflow-hidden border border-blue-600/20 shadow-lg shadow-blue-600/5">
+              <div className="space-y-2">
+                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600 block px-1">After</span>
+                <div className="aspect-video rounded-xl overflow-hidden border border-blue-600/10 shadow-2xl shadow-blue-600/10">
                   <img 
                     src={content.afterImages[0]} 
                     className="w-full h-full object-cover" 
@@ -318,8 +301,12 @@ export const BehindTheScenes = () => {
   const [clientPhoto, setClientPhoto] = useState<string | null>(null);
   const [whatsappChat, setWhatsappChat] = useState<{ role: 'client' | 'designer'; text: string; time: string; isVoice?: boolean; duration?: string }[]>([]);
   const [image, setImage] = useState<string | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [clientPhotoUrlInput, setClientPhotoUrlInput] = useState('');
   const [beforeImages, setBeforeImages] = useState<string[]>([]);
+  const [beforeUrlInput, setBeforeUrlInput] = useState('');
   const [afterImages, setAfterImages] = useState<string[]>([]);
+  const [afterUrlInput, setAfterUrlInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [dragActive, setDragActive] = useState<{ [key: string]: boolean }>({});
   const [confirmModal, setConfirmModal] = useState<{
@@ -341,16 +328,16 @@ export const BehindTheScenes = () => {
     try {
       const sampleData = [
         {
-          title: "Gaming Channel Rebrand 2024",
+          title: "I Spent 100 Days in a Secret Bunker",
           description: "Complete visual overhaul for a top-tier gaming channel, focusing on high-energy aesthetics and brand consistency.",
-          mainImage: "https://picsum.photos/seed/game1/1200/800",
-          beforeImages: ["https://picsum.photos/seed/game_old/800/600"],
-          afterImages: ["https://picsum.photos/seed/game_new/800/600"],
+          imageUrl: "https://i.ibb.co/5Xd8rDDZ/image.png",
+          beforeImages: ["https://i.ibb.co/5Xd8rDDZ/image.png"],
+          afterImages: ["https://i.ibb.co/5Xd8rDDZ/image.png"],
           clientName: "Alex 'ProGamer' Rivers",
-          clientPhoto: "https://picsum.photos/seed/alex/200/200",
-          layout: "Dynamic & Bold",
-          workflow: "Concept Art -> 3D Modeling -> UI Integration -> Final Polish",
-          feedback: "The new look has completely changed how my audience perceives the brand. Engagement is up 30%!",
+          clientPhoto: "https://i.ibb.co/qXFY4XD/dposa-s.png",
+          layoutIdea: "Dynamic & Bold",
+          designWorkflow: "Concept Art -> 3D Modeling -> UI Integration -> Final Polish",
+          clientFeedback: "The new look has completely changed how my audience perceives the brand. Engagement is up 30%!",
           whatsappChat: [
             { role: 'client', text: "Yo! The new channel art is insane. Everyone is loving it!", time: "11:20 AM" },
             { role: 'designer', text: "That's awesome to hear, Alex! We really wanted to capture that high-energy vibe.", time: "11:25 AM" },
@@ -362,14 +349,14 @@ export const BehindTheScenes = () => {
         {
           title: "Minimalist Tech Review Aesthetic",
           description: "Clean, minimalist aesthetic for high-end tech reviews, emphasizing product details and clarity.",
-          mainImage: "https://picsum.photos/seed/tech1/1200/800",
-          beforeImages: ["https://picsum.photos/seed/tech_old/800/600"],
-          afterImages: ["https://picsum.photos/seed/tech_new/800/600"],
+          imageUrl: "https://i.ibb.co/rKFrLL2S/image.png",
+          beforeImages: ["https://i.ibb.co/rKFrLL2S/image.png"],
+          afterImages: ["https://i.ibb.co/rKFrLL2S/image.png"],
           clientName: "TechFocus Reviews",
-          clientPhoto: "https://picsum.photos/seed/techfocus/200/200",
-          layout: "Clean & Structured",
-          workflow: "Style Guide -> Layout Design -> Color Grading -> Final Export",
-          feedback: "The minimalism really lets the products shine. Exactly what we were looking for.",
+          clientPhoto: "https://i.ibb.co/qXFY4XD/dposa-s.png",
+          layoutIdea: "Clean & Structured",
+          designWorkflow: "Style Guide -> Layout Design -> Color Grading -> Final Export",
+          clientFeedback: "The minimalism really lets the products shine. Exactly what we were looking for.",
           whatsappChat: [
             { role: 'client', text: "The new layout is perfect. Very clean.", time: "2:00 PM" },
             { role: 'designer', text: "Great! We kept the white space intentional to focus on the product shots.", time: "2:05 PM" },
@@ -383,7 +370,8 @@ export const BehindTheScenes = () => {
         await addDoc(collection(db, 'behind_the_scenes'), data);
       }
 
-      clearCache('bts_limit_10');
+      clearCache('bts');
+      clearCache('behind');
       await fetchBTS(true);
       toast.success('Detailed sample data seeded!', { id: toastId });
     } catch (err) {
@@ -403,6 +391,10 @@ export const BehindTheScenes = () => {
       const data = await getDocsCached(q, 'bts_limit_10', force);
       setContents(data as BTSContent[]);
     } catch (err) {
+      if (isQuotaExceededError(err)) {
+        console.warn("BehindTheScenes: Quota exceeded, using fallback via getDocsCached");
+        return;
+      }
       handleFirestoreError(err, OperationType.LIST, 'behind_the_scenes');
     } finally {
       setLoading(false);
@@ -527,7 +519,7 @@ export const BehindTheScenes = () => {
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-flash-latest",
         contents: { parts },
         config: {
           responseMimeType: "application/json",
@@ -584,16 +576,22 @@ export const BehindTheScenes = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!image || !title) return;
+    
+    const finalImageUrl = imageUrlInput.trim() || image;
+    const finalBeforeImages = beforeUrlInput.trim() ? [beforeUrlInput.trim()] : beforeImages;
+    const finalAfterImages = afterUrlInput.trim() ? [afterUrlInput.trim()] : afterImages;
+    const finalClientPhoto = clientPhotoUrlInput.trim() || clientPhoto;
+
+    if (!finalImageUrl || !title) return;
 
     // Check total size of images to avoid Firestore 1MB limit
-    const totalSize = (image?.length || 0) + 
-                     (beforeImages.reduce((acc, img) => acc + img.length, 0)) + 
-                     (afterImages.reduce((acc, img) => acc + img.length, 0));
+    const totalSize = (finalImageUrl?.length || 0) + 
+                     (finalBeforeImages.reduce((acc, img) => acc + img.length, 0)) + 
+                     (finalAfterImages.reduce((acc, img) => acc + img.length, 0));
     
     // Base64 is ~33% larger than binary. 1MB binary is ~1.33MB base64.
-    // We'll be conservative and limit to 1.2MB total base64.
-    if (totalSize > 1200000) {
+    // We'll limit to 800KB total base64 to be safe (approx 600KB binary)
+    if (totalSize > 800000 && !imageUrlInput.trim()) {
       setError('Total image size is too large. Please remove some images or use smaller ones.');
       toast.error('Total image size exceeds limit');
       return;
@@ -612,11 +610,11 @@ export const BehindTheScenes = () => {
         caseStudy: caseStudy || null,
         clientFeedback: clientFeedback || null,
         clientName: clientName || null,
-        clientPhoto: clientPhoto || null,
+        clientPhoto: finalClientPhoto || null,
         whatsappChat: whatsappChat.length > 0 ? whatsappChat : null,
-        imageUrl: image,
-        beforeImages: beforeImages.length > 0 ? beforeImages : null,
-        afterImages: afterImages.length > 0 ? afterImages : null,
+        imageUrl: finalImageUrl,
+        beforeImages: finalBeforeImages.length > 0 ? finalBeforeImages : null,
+        afterImages: finalAfterImages.length > 0 ? finalAfterImages : null,
         createdAt: serverTimestamp(),
       });
       
@@ -631,17 +629,18 @@ export const BehindTheScenes = () => {
         caseStudy: caseStudy || undefined,
         clientFeedback: clientFeedback || undefined,
         clientName: clientName || undefined,
-        clientPhoto: clientPhoto || undefined,
+        clientPhoto: finalClientPhoto || undefined,
         whatsappChat: whatsappChat.length > 0 ? whatsappChat : undefined,
-        imageUrl: image,
-        beforeImages: beforeImages.length > 0 ? beforeImages : undefined,
-        afterImages: afterImages.length > 0 ? afterImages : undefined,
+        imageUrl: finalImageUrl,
+        beforeImages: finalBeforeImages.length > 0 ? finalBeforeImages : undefined,
+        afterImages: finalAfterImages.length > 0 ? finalAfterImages : undefined,
         createdAt: Timestamp.now(),
       };
       setContents(prev => [newBTS, ...prev]);
       
-      // Clear cache
-      clearCache('bts_limit_10');
+      // Clear cache thoroughly
+      clearCache('bts');
+      clearCache('behind');
       
       setTitle('');
       setVideoTitle('');
@@ -652,10 +651,14 @@ export const BehindTheScenes = () => {
       setClientFeedback('');
       setClientName('');
       setClientPhoto(null);
+      setClientPhotoUrlInput('');
       setWhatsappChat([]);
       setImage(null);
+      setImageUrlInput('');
       setBeforeImages([]);
+      setBeforeUrlInput('');
       setAfterImages([]);
+      setAfterUrlInput('');
       setShowForm(false);
       toast.success('Case study uploaded successfully!', { id: toastId });
     } catch (err) {
@@ -829,22 +832,7 @@ export const BehindTheScenes = () => {
             ))}
           </div>
         ) : contents.length === 0 && !loading ? (
-          <div className="w-full py-20 bg-zinc-50 border border-dashed border-zinc-200 rounded-[3rem] text-center">
-            <div className="w-16 h-16 bg-white shadow-sm text-zinc-300 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ImageIcon size={32} />
-            </div>
-            <h3 className="text-xl font-bold text-zinc-900 mb-2">No case studies yet</h3>
-            <p className="text-zinc-500 text-sm max-w-md mx-auto mb-8">This section is currently empty. If you are an admin, you can add new content using the button above.</p>
-            {isAdmin && (
-              <button 
-                onClick={seedBTS}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
-              >
-                <Sparkles size={18} />
-                Seed Sample Data
-              </button>
-            )}
-          </div>
+          null
         ) : (
           <AnimatePresence mode="popLayout">
             {contents.map((content, i) => (
@@ -1361,12 +1349,19 @@ export const BehindTheScenes = () => {
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
-                      Client Photo
+                      Client Photo URL
                     </label>
+                    <input
+                      type="url"
+                      value={clientPhotoUrlInput}
+                      onChange={(e) => setClientPhotoUrlInput(e.target.value)}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-medium mb-3"
+                      placeholder="Paste client photo URL..."
+                    />
                     <div className="flex items-center gap-4">
                       <label className="flex-grow flex items-center justify-center gap-2 py-4 px-6 bg-zinc-50 border border-dashed border-black/10 rounded-2xl hover:bg-zinc-100 transition-all cursor-pointer">
                         <Upload size={14} className="text-zinc-400" />
-                        <span className="text-xs font-medium text-zinc-400">{clientPhoto ? 'Photo Selected' : 'Upload Client Photo'}</span>
+                        <span className="text-xs font-medium text-zinc-400">{(clientPhoto || clientPhotoUrlInput) ? 'Photo Selected' : 'Upload File instead'}</span>
                         <input 
                           type="file" 
                           accept="image/*" 
@@ -1385,12 +1380,15 @@ export const BehindTheScenes = () => {
                           className="hidden" 
                         />
                       </label>
-                      {clientPhoto && (
+                      {(clientPhoto || clientPhotoUrlInput) && (
                         <div className="w-14 h-14 rounded-xl overflow-hidden border border-black/5 relative group">
-                          <img src={clientPhoto} alt="Client" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <img src={clientPhotoUrlInput || clientPhoto || ""} alt="Client" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           <button 
                             type="button"
-                            onClick={() => setClientPhoto(null)}
+                            onClick={() => {
+                              setClientPhoto(null);
+                              setClientPhotoUrlInput('');
+                            }}
                             className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
                           >
                             <X size={14} />
@@ -1439,17 +1437,38 @@ export const BehindTheScenes = () => {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                      Case Study
-                    </label>
-                  </div>
-                  <textarea
-                    value={caseStudy}
-                    onChange={(e) => setCaseStudy(e.target.value)}
-                    className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-medium min-h-[150px]"
-                    placeholder="The full case study will appear here..."
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                    Main Project Image
+                  </label>
+                  <input
+                    type="url"
+                    value={imageUrlInput}
+                    onChange={(e) => setImageUrlInput(e.target.value)}
+                    className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-medium"
+                    placeholder="Paste main image URL here..."
                   />
+                  <div className="flex items-center gap-6">
+                    <label className="flex-1 flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-black/5 rounded-3xl hover:border-blue-600/30 transition-all cursor-pointer bg-black/[0.01]">
+                      <ImageIcon size={32} className="text-zinc-300" />
+                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Select File</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e.target.files, 'main')} />
+                    </label>
+                    {(image || imageUrlInput) && (
+                      <div className="w-32 h-32 rounded-2xl overflow-hidden border border-black/5 relative group">
+                        <img src={imageUrlInput || image || ""} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setImage(null);
+                            setImageUrlInput('');
+                          }}
+                          className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -1543,8 +1562,15 @@ export const BehindTheScenes = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
-                      Before Images (Bulk)
+                      Before Image URL
                     </label>
+                    <input
+                      type="url"
+                      value={beforeUrlInput}
+                      onChange={(e) => setBeforeUrlInput(e.target.value)}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-medium mb-3"
+                      placeholder="Paste Before URL..."
+                    />
                     <div 
                       onDragEnter={(e) => handleDrag(e, 'before', true)}
                       onDragLeave={(e) => handleDrag(e, 'before', false)}
@@ -1554,8 +1580,14 @@ export const BehindTheScenes = () => {
                         dragActive['before'] ? 'border-blue-600 bg-blue-50/50' : 'border-zinc-200 hover:border-blue-600/50'
                       }`}
                     >
-                      {beforeImages.length > 0 ? (
+                      {(beforeImages.length > 0 || beforeUrlInput) ? (
                         <div className="p-4 grid grid-cols-3 gap-2 h-full overflow-y-auto custom-scrollbar">
+                          {beforeUrlInput && (
+                            <div className="relative aspect-square rounded-lg overflow-hidden border border-blue-600/30 group/img">
+                               <img src={beforeUrlInput} className="w-full h-full object-cover" alt="Before URL" referrerPolicy="no-referrer" />
+                               <button type="button" onClick={() => setBeforeUrlInput('')} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full"><X className="w-2 h-2" /></button>
+                            </div>
+                          )}
                           {beforeImages.map((img, idx) => (
                             <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-black/5 group/img">
                               <img src={img} className="w-full h-full object-cover" alt={`Before ${idx}`} referrerPolicy="no-referrer" loading="lazy" />
@@ -1576,7 +1608,7 @@ export const BehindTheScenes = () => {
                       ) : (
                         <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
                           <Upload className="w-4 h-4 text-zinc-300 mb-2" />
-                          <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Drag & Drop Before Images</span>
+                          <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Upload Before Image</span>
                           <input type="file" multiple accept="image/*" onChange={(e) => handleImageUpload(e.target.files, 'before')} className="hidden" />
                         </label>
                       )}
@@ -1585,8 +1617,15 @@ export const BehindTheScenes = () => {
 
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3">
-                      After Images (Bulk)
+                      After Image URL
                     </label>
+                    <input
+                      type="url"
+                      value={afterUrlInput}
+                      onChange={(e) => setAfterUrlInput(e.target.value)}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-medium mb-3"
+                      placeholder="Paste After URL..."
+                    />
                     <div 
                       onDragEnter={(e) => handleDrag(e, 'after', true)}
                       onDragLeave={(e) => handleDrag(e, 'after', false)}
@@ -1596,8 +1635,14 @@ export const BehindTheScenes = () => {
                         dragActive['after'] ? 'border-blue-600 bg-blue-50/50' : 'border-zinc-200 hover:border-blue-600/50'
                       }`}
                     >
-                      {afterImages.length > 0 ? (
+                      {(afterImages.length > 0 || afterUrlInput) ? (
                         <div className="p-4 grid grid-cols-3 gap-2 h-full overflow-y-auto custom-scrollbar">
+                          {afterUrlInput && (
+                            <div className="relative aspect-square rounded-lg overflow-hidden border border-blue-600/30 group/img">
+                               <img src={afterUrlInput} className="w-full h-full object-cover" alt="After URL" referrerPolicy="no-referrer" />
+                               <button type="button" onClick={() => setAfterUrlInput('')} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full"><X className="w-2 h-2" /></button>
+                            </div>
+                          )}
                           {afterImages.map((img, idx) => (
                             <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-black/5 group/img">
                               <img src={img} className="w-full h-full object-cover" alt={`After ${idx}`} referrerPolicy="no-referrer" loading="lazy" />
@@ -1618,12 +1663,26 @@ export const BehindTheScenes = () => {
                       ) : (
                         <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
                           <Upload className="w-4 h-4 text-zinc-300 mb-2" />
-                          <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Drag & Drop After Images</span>
+                          <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Upload After Image</span>
                           <input type="file" multiple accept="image/*" onChange={(e) => handleImageUpload(e.target.files, 'after')} className="hidden" />
                         </label>
                       )}
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                      Case Study Text (Markdown supported)
+                    </label>
+                  </div>
+                  <textarea
+                    value={caseStudy}
+                    onChange={(e) => setCaseStudy(e.target.value)}
+                    className="w-full bg-zinc-50 border border-black/5 rounded-2xl px-6 py-4 text-[#1A1A1A] focus:outline-none focus:border-blue-600 transition-colors font-medium min-h-[150px]"
+                    placeholder="The full case study details..."
+                  />
                 </div>
 
                 <div>

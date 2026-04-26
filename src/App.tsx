@@ -58,7 +58,18 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import WorkPage from './pages/WorkPage';
 import AboutPage from './pages/AboutPage';
 import JourneyPage from './pages/JourneyPage';
-import { auth } from './firebase';
+import { 
+  db, 
+  auth,
+  collection, 
+  query, 
+  orderBy, 
+  limit, 
+  getDocsCached,
+  handleFirestoreError,
+  OperationType,
+  isQuotaExceededError
+} from './firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { ThumbnailGallery } from './components/ThumbnailGallery';
 import { CommentsSection } from './components/CommentsSection';
@@ -88,11 +99,42 @@ const TypewriterText = ({ text, speed = 20 }: { text: string; speed?: number }) 
 };
 
 // --- Scrapbook Decorations Component ---
-const ScrapbookDecorations = () => {
+const ScrapbookDecorations = ({ scrollY }: { scrollY: any }) => {
+  const yTranslate = useTransform(scrollY, [0, 500], [0, 50]);
+  const ySticker1 = useTransform(scrollY, [0, 1000], [0, -30]);
+  const ySticker2 = useTransform(scrollY, [0, 1000], [0, -60]);
+  const ySticker3 = useTransform(scrollY, [0, 1000], [0, -90]);
+  const yString = useTransform(scrollY, [0, 1000], [0, 100]);
+  const [stickers, setStickers] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchStickers = async () => {
+      try {
+        const q = query(
+          collection(db, 'thumbnails'),
+          orderBy('createdAt', 'desc'),
+          limit(3)
+        );
+        const data = await getDocsCached(q, 'thumbnails_decorations_hp');
+        setStickers(data);
+      } catch (e) {
+        // Silent fail for decorations
+      }
+    };
+    fetchStickers();
+  }, []);
+  
+  const stickerTransforms = [ySticker1, ySticker2, ySticker3];
+
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
       {/* Red String Effect */}
-      <svg className="absolute top-0 left-0 w-full h-full opacity-30" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+      <motion.svg 
+        style={{ y: yString }}
+        className="absolute top-0 left-0 w-full h-full opacity-30" 
+        viewBox="0 0 1000 1000" 
+        preserveAspectRatio="none"
+      >
         <motion.path
           d="M 100 200 Q 300 100 500 300 T 900 200"
           fill="none"
@@ -111,7 +153,41 @@ const ScrapbookDecorations = () => {
           whileInView={{ pathLength: 1 }}
           transition={{ duration: 2, ease: "easeInOut", delay: 0.5 }}
         />
-      </svg>
+      </motion.svg>
+
+      {/* Dynamic Thumbnail Stickers */}
+      {stickers.map((thumb, i) => {
+        const rotations = [-12, 8, -5];
+        const positions = [
+          { top: '10%', left: '5%' },
+          { bottom: '15%', right: '8%' },
+          { top: '60%', left: '12%' }
+        ];
+        if (i >= positions.length) return null;
+        
+        return (
+          <motion.div
+            key={thumb.id}
+            initial={{ opacity: 0, scale: 0, rotate: rotations[i] }}
+            animate={{ opacity: 0.8, scale: 0.6, rotate: rotations[i] }}
+            style={{ 
+              top: positions[i].top, 
+              left: positions[i].left,
+              right: positions[i].right,
+              y: stickerTransforms[i]
+            }}
+            className="absolute z-10 p-2 bg-white shadow-xl border border-black/5 rounded-lg w-48 hidden md:block"
+          >
+            <div className="aspect-[16/9] rounded overflow-hidden mb-2">
+              <img src={thumb.imageUrl} alt="" className="w-full h-full object-cover grayscale opacity-50" referrerPolicy="no-referrer" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="w-6 h-1 bg-zinc-100 rounded" />
+              <PushPin color={i % 2 === 0 ? "#ef4444" : "#3b82f6"} className="scale-50" />
+            </div>
+          </motion.div>
+        );
+      })}
 
       {/* Push Pins */}
       <PushPin className="absolute top-10 left-[10%] rotate-[-15deg] scale-75" color="#ef4444" />
@@ -263,8 +339,8 @@ const AIChat = () => {
 
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text }] }],
+        model: "gemini-3.1-flash-tts-preview",
+        contents: { parts: [{ text }] },
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -377,24 +453,22 @@ const AIChat = () => {
       }
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          {
-            parts: [
-              {
-                text: `You are Zeeshan's AI assistant for his portfolio website "Z Score". Zeeshan is a premium YouTube thumbnail designer. 
-                Key info about Zeeshan:
-                - 5+ years experience.
-                - Worked with MrBeast, Azul Welz, Hustle Ninjas.
-                - Specializes in psychological design and high CTR.
-                - Avg CTR: 15%, 200+ projects, 400K+ views.
-                - Pricing: Starter ($12), Pro ($60), Elite ($120).
-                - Contact: WhatsApp +92 303 5408206.
-                Answer the following user question briefly and professionally: ${userMessage}`
-              }
-            ]
-          }
-        ],
+        model: "gemini-flash-latest",
+        contents: {
+          parts: [
+            {
+              text: `You are Zeeshan's AI assistant for his portfolio website "Z Score". Zeeshan is a premium YouTube thumbnail designer. 
+              Key info about Zeeshan:
+              - 5+ years experience.
+              - Worked with MrBeast, Azul Welz, Hustle Ninjas.
+              - Specializes in psychological design and high CTR.
+              - Avg CTR: 15%, 200+ projects, 400K+ views.
+              - Pricing: Starter ($12), Pro ($60), Elite ($120).
+              - Contact: WhatsApp +92 303 5408206.
+              Answer the following user question briefly and professionally: ${userMessage}`
+            }
+          ]
+        },
       });
 
       const text = response.text || "I'm sorry, I couldn't process that. Please try again or contact Zeeshan directly!";
@@ -673,9 +747,9 @@ const PROJECTS: Project[] = [
   { id: 1, title: "I Spent 100 Days in a Secret Bunker", category: "Gaming", image: "https://i.ibb.co/5Xd8rDDZ/image.png", stats: "14.2% CTR" },
   { id: 2, title: "The Crypto Crash: Why Everything is Falling", category: "Finance", image: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR" },
   { id: 3, title: "AI is Replacing Designers (The Truth)", category: "Tech", image: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR" },
-  { id: 4, title: "Solo Travel in Japan", category: "Vlog", image: "https://picsum.photos/seed/thumb4/800/450", stats: "42K Views" },
-  { id: 5, title: "100 Days of Fitness", category: "Vlog", image: "https://picsum.photos/seed/thumb5/800/450", stats: "2.5% CTR" },
-  { id: 6, title: "Ultimate Gaming Setup", category: "Tech", image: "https://picsum.photos/seed/thumb6/800/450", stats: "95K Views" },
+  { id: 4, title: "Visual Storytelling Masterclass", category: "Portfolio", image: "https://i.ibb.co/qXFY4XD/dposa-s.png", stats: "Elite Design" },
+  { id: 5, title: "Modern Brand Identity", category: "Business", image: "https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png", stats: "Top Tier" },
+  { id: 6, title: "Travel Hook: Alpine Adventure", category: "Travel", image: "https://i.ibb.co/rR6LmpRm/image.png", stats: "15% Growth" },
 ];
 
 const JOURNEY: JourneyItem[] = [
@@ -1152,19 +1226,224 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
   );
 };
 
+{/* --- Featured Work Showcase Section --- */}
+const FeaturedCaseStudies = () => {
+  const [studies, setStudies] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStudies = async () => {
+      try {
+        const q = query(collection(db, 'bts'), orderBy('createdAt', 'desc'), limit(3));
+        const data = await getDocsCached(q, 'bts_featured_hp', true);
+        setStudies(data);
+      } catch (err) {
+        console.error("Failed to fetch featured studies:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStudies();
+  }, []);
+
+  if (isLoading || studies.length === 0) return null;
+
+  return (
+    <section className="py-24 bg-zinc-50 relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="flex flex-col md:flex-row items-end justify-between mb-16 gap-6">
+          <div className="space-y-4">
+            <h3 className="text-blue-600 font-bold uppercase tracking-[0.3em] text-xs">Deep Dives</h3>
+            <h2 className="text-4xl md:text-6xl font-display font-black text-[#1A1A1A]">
+              PROCESS & <br /><span className="text-blue-600">STRATEGY.</span>
+            </h2>
+          </div>
+          <Link 
+            to="/work" 
+            className="group flex items-center gap-3 px-6 py-3 bg-white border border-black/5 rounded-full hover:bg-black hover:text-white transition-all text-xs font-bold uppercase tracking-widest shadow-sm"
+          >
+            Read Case Studies
+            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {studies.map((study, i) => (
+            <motion.div
+              key={study.id}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1 }}
+              className="group bg-white rounded-3xl p-4 border border-black/5 hover:border-blue-600/20 transition-all duration-500 shadow-xl hover:shadow-2xl"
+            >
+              <div className="aspect-video rounded-2xl overflow-hidden mb-6 relative">
+                <img 
+                  src={study.imageUrl} 
+                  alt={study.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute top-4 left-4">
+                  <span className="px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full uppercase tracking-widest shadow-lg">
+                    {study.category || 'Case Study'}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-3 px-2">
+                <h4 className="text-xl font-bold text-[#1A1A1A] group-hover:text-blue-600 transition-colors line-clamp-1">
+                  {study.title}
+                </h4>
+                <p className="text-sm text-zinc-500 font-medium line-clamp-2 leading-relaxed">
+                  {study.description}
+                </p>
+                <div className="pt-4 flex items-center justify-between border-t border-black/5">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{study.clientName || 'Private Client'}</span>
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <span className="text-[10px] font-black uppercase tracking-tighter">View Process</span>
+                    <ArrowRight size={10} />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const FeaturedWork = () => {
+  const [thumbnails, setThumbnails] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeatured = async () => {
+      try {
+        const q = query(
+          collection(db, 'thumbnails'),
+          orderBy('createdAt', 'desc'),
+          limit(48)
+        );
+        const data = await getDocsCached(q, 'thumbnails_featured_hp_v2', true); // Force fresh fetch on home page
+        setThumbnails(data);
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          console.warn("FeaturedWork: Quota exceeded, using fallback via getDocsCached");
+          // Try to get from cache without forcing refresh as a last resort
+          const fallback = await getDocsCached(query(collection(db, 'thumbnails'), orderBy('createdAt', 'desc'), limit(48)), 'thumbnails_featured_hp_v2', false);
+          setThumbnails(fallback);
+          return;
+        }
+        console.error("Failed to fetch featured thumbnails:", err);
+        handleFirestoreError(err, OperationType.GET, 'thumbnails');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchFeatured();
+  }, []);
+
+  if (isLoading) return <ZPageLoader />;
+  
+  return (
+    <section className="py-20 bg-white relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="flex flex-col md:flex-row items-end justify-between mb-12 gap-6">
+          <div className="space-y-4">
+            <h3 className="text-blue-600 font-bold uppercase tracking-[0.3em] text-xs">Full Portfolio</h3>
+            <h2 className="text-4xl md:text-6xl font-display font-black text-[#1A1A1A]">
+              THUMBNAIL <br /><span className="text-blue-600">GALLERY.</span>
+            </h2>
+            {thumbnails.length > 0 && thumbnails[0].isFallback && (
+              <div className="mt-4 flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[10px] font-bold uppercase tracking-widest w-fit">
+                <AlertCircle size={12} />
+                Showing Demo Data (Limit Reached)
+              </div>
+            )}
+          </div>
+          <Link 
+            to="/work" 
+            className="group flex items-center gap-3 px-6 py-3 bg-zinc-50 border border-black/5 rounded-full hover:bg-black hover:text-white transition-all text-xs font-bold uppercase tracking-widest"
+          >
+            Explore All Work
+            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </div>
+
+        {thumbnails.length === 0 ? (
+          <div className="py-20 text-center border-2 border-dashed border-black/5 rounded-3xl">
+            <p className="text-zinc-400 font-medium">No live thumbnails found yet. Start uploading in the Work page!</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {thumbnails.map((thumb, i) => (
+              <motion.div
+                key={thumb.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="group"
+              >
+                <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/5 bg-zinc-900 shadow-2xl hover:border-blue-500/30 transition-all duration-500 mb-4">
+                  <img 
+                    src={thumb.imageUrl} 
+                    alt={thumb.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90 group-hover:opacity-100"
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                </div>
+                
+                <div className="px-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-blue-600/10 text-blue-600 text-[8px] font-black rounded uppercase tracking-widest">
+                      {thumb.category || 'Premium'}
+                    </span>
+                    {thumb.stats && <span className="text-[10px] text-zinc-500 font-bold tracking-tight">{thumb.stats}</span>}
+                  </div>
+                  <h4 className="text-[#1A1A1A] font-display font-bold text-lg leading-tight group-hover:text-blue-600 transition-colors duration-300 truncate">
+                    {thumb.title}
+                  </h4>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
 const Hero = () => {
   const { scrollY } = useScroll();
   const y1 = useTransform(scrollY, [0, 500], [0, 200]);
+  const yBg = useTransform(scrollY, [0, 1000], [0, -150]);
+  const yGlow1 = useTransform(scrollY, [0, 1000], [0, 100]);
+  const yGlow2 = useTransform(scrollY, [0, 1000], [0, -100]);
+  const yFloating1 = useTransform(scrollY, [0, 1000], [0, -50]);
+  const yFloating2 = useTransform(scrollY, [0, 1000], [0, 50]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
 
   return (
     <section id="home" className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 overflow-hidden">
       {/* Background Noise/Grain Overlay */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/p6.png')]" />
+      <motion.div 
+        style={{ y: yBg }}
+        className="absolute inset-0 opacity-[0.03] pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/p6.png')]" 
+      />
 
       {/* Background Glows (Subtle & Light) */}
-      <div className="absolute top-1/4 -left-1/4 w-[500px] h-[500px] bg-blue-100/30 blur-[120px] rounded-full animate-pulse" />
-      <div className="absolute bottom-1/4 -right-1/4 w-[500px] h-[500px] bg-purple-100/30 blur-[120px] rounded-full animate-pulse delay-700" />
+      <motion.div 
+        style={{ y: yGlow1 }}
+        className="absolute top-1/4 -left-1/4 w-[500px] h-[500px] bg-blue-100/30 blur-[120px] rounded-full animate-pulse" 
+      />
+      <motion.div 
+        style={{ y: yGlow2 }}
+        className="absolute bottom-1/4 -right-1/4 w-[500px] h-[500px] bg-purple-100/30 blur-[120px] rounded-full animate-pulse delay-700" 
+      />
       
       <motion.div 
         style={{ y: y1, opacity }}
@@ -1185,9 +1464,18 @@ const Hero = () => {
           transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
           className="text-7xl md:text-[10rem] font-display font-bold tracking-tighter mb-8 leading-[0.85] text-[#1A1A1A] relative"
         >
-          <ScrapbookDecorations />
-          STOP THE <br />
-          <span className="text-blue-600">SCROLL.</span>
+          {/* Simplified Decorations */}
+      <motion.div 
+        style={{ opacity }}
+        className="absolute inset-0 pointer-events-none"
+      >
+        <div className="absolute top-0 right-[15%] w-64 h-64 bg-blue-600/5 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-0 left-[15%] w-64 h-64 bg-purple-600/5 blur-[120px] rounded-full animate-pulse delay-1000" />
+      </motion.div>
+          <TypewriterText text="STOP THE" speed={100} /> <br />
+          <span className="text-blue-600 italic">
+            <TypewriterText text="SCROLL." speed={150} />
+          </span>
         </motion.h1>
         
         <motion.p 
@@ -1198,14 +1486,6 @@ const Hero = () => {
         >
           High-fidelity visual hooks engineered for maximum CTR. 
           I turn viewers into subscribers through psychological design.
-        </motion.p>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 1 }}
-          className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-12"
-        >
-          Note: Thumbnails may take a moment to load.
         </motion.p>
         
         <motion.div 
@@ -1237,7 +1517,8 @@ const Hero = () => {
 
       {/* Restored Floating Elements */}
       <motion.div 
-        animate={{ y: [0, 20, 0] }}
+        style={{ y: yFloating1 }}
+        animate={{ x: [0, 5, 0] }}
         transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
         className="absolute bottom-1/3 left-[10%] hidden xl:block p-4 bg-white/50 backdrop-blur-sm rounded-xl border border-black/5 shadow-sm"
       >
@@ -1253,7 +1534,8 @@ const Hero = () => {
       </motion.div>
 
       <motion.div 
-        animate={{ y: [0, -20, 0] }}
+        style={{ y: yFloating2 }}
+        animate={{ x: [0, -5, 0] }}
         transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
         className="absolute top-1/3 right-[10%] hidden xl:block p-4 bg-white/50 backdrop-blur-sm rounded-xl border border-black/5 shadow-sm"
       >
@@ -2755,6 +3037,8 @@ export default function App() {
                     <Hero />
                     <About />
                     <WhyMe />
+                    <FeaturedWork />
+                    <FeaturedCaseStudies />
                     <Journey />
                     <Process />
                     <Reviews />

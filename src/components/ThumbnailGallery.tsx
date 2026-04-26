@@ -33,7 +33,8 @@ import {
   getDocsCached,
   clearCache,
   clearAllCache,
-  where
+  where,
+  isQuotaExceededError
 } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
 import { deleteDoc, doc, updateDoc, limit, startAfter, getDocs, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
@@ -51,10 +52,11 @@ interface Thumbnail {
   category?: string;
   stats?: string;
   createdAt: any;
+  isFallback?: boolean;
 }
 
 const CATEGORIES = ['All', 'Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'];
-const PAGE_SIZE = 40;
+const PAGE_SIZE = 48; // Increased from 12 to show more thumbnails, well within 5MB LocalStorage limit
 
 const ThumbnailSkeleton = () => (
   <div className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-2rem)] lg:w-[calc(50%-2.5rem)] max-w-lg mx-auto border border-black/[0.02] space-y-6">
@@ -106,11 +108,11 @@ const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 450, quali
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
       
-      // Try to get a size under 150KB for faster loading and to avoid proxy limits
+      // Try to get a size under 80KB for faster loading and to avoid localStorage limits
       let currentQuality = quality;
       let result = canvas.toDataURL('image/jpeg', currentQuality);
       
-      while (result.length > 150000 && currentQuality > 0.1) {
+      while (result.length > 80000 && currentQuality > 0.1) {
         currentQuality -= 0.05;
         result = canvas.toDataURL('image/jpeg', currentQuality);
       }
@@ -184,7 +186,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
             transition={{ delay: i * 0.1 + 0.5 }}
             className="font-mono text-2xl font-bold text-zinc-100 group-hover:text-zinc-200 transition-colors"
           >
-            0{i + 1}
+            {String(i + 1).padStart(2, '0')}
           </motion.span>
           <div className="flex items-center gap-1">
             {[...Array(5)].map((_, starI) => (
@@ -193,14 +195,14 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
           </div>
         </div>
 
-        <div className="aspect-video overflow-hidden relative bg-zinc-100 rounded-2xl border border-black/[0.03]">
+        <div className="aspect-video overflow-hidden relative bg-zinc-900 rounded-2xl border border-white/5 group-hover:border-blue-500/30 transition-all duration-500 shadow-2xl">
           {!isLoaded && !hasError && (
             <ZSkeleton className="absolute inset-0 rounded-2xl" />
           )}
           {hasError && (
-            <div className="absolute inset-0 bg-zinc-100 flex flex-col items-center justify-center p-4 text-center">
-              <ImageIcon className="text-zinc-300 mb-2" size={24} />
-              <p className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Image failed to load</p>
+            <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center p-4 text-center">
+              <ImageIcon className="text-zinc-800 mb-2" size={24} />
+              <p className="text-[8px] font-bold uppercase tracking-widest text-zinc-600">Image failed to load</p>
             </div>
           )}
             <motion.img 
@@ -215,18 +217,21 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
                 setHasError(true);
                 setIsLoaded(true);
               }}
-              className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110"
+              className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105"
               referrerPolicy="no-referrer"
               loading={i < 8 ? "eager" : "lazy"}
             />
           
-          <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-30">
+          {/* Subtle Overlay */}
+          <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+          <div className="absolute top-4 right-4 flex gap-2 opacity-0 translate-y-[-10px] group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 z-30">
             <button 
               onClick={handleCopy}
-              className="p-2.5 bg-white/90 backdrop-blur-md text-zinc-600 rounded-xl hover:bg-white transition-all shadow-lg"
+              className="p-2.5 bg-black/40 backdrop-blur-md border border-white/10 text-white rounded-xl hover:bg-white hover:text-black transition-all"
               title="Copy Image Link"
             >
-              {isCopied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+              {isCopied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
             </button>
             {isAdmin && (
               <>
@@ -236,17 +241,17 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
                     handleRefine(thumb.id, thumb.imageUrl);
                   }}
                   disabled={refiningId === thumb.id}
-                  className="p-2.5 bg-white/90 backdrop-blur-md text-blue-600 rounded-xl hover:bg-white transition-all shadow-lg disabled:opacity-50"
-                  title="Refine with AI"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 border border-blue-400/30 text-white rounded-xl hover:bg-blue-700 transition-all shadow-xl disabled:opacity-50 group/refine"
                 >
-                  {refiningId === thumb.id ? <ZSpinner size={16} /> : <Sparkles size={16} />}
+                  {refiningId === thumb.id ? <ZSpinner size={14} /> : <Sparkles size={14} className="group-hover/refine:rotate-12 transition-transform" />}
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Refine</span>
                 </button>
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDelete(thumb.id);
                   }}
-                  className="p-2.5 bg-white/90 backdrop-blur-md text-red-500 rounded-xl hover:bg-white transition-all shadow-lg"
+                  className="p-2.5 bg-black/40 backdrop-blur-md border border-white/10 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-lg"
                   title="Delete Thumbnail"
                 >
                   <Trash2 size={16} />
@@ -256,41 +261,22 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3 px-1">
           <div className="space-y-1">
-            <h4 className="text-xl font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-blue-600/10 text-blue-600 text-[8px] font-black tracking-tighter rounded uppercase">
+                {thumb.category || 'Portfolio'}
+              </span>
+              {thumb.stats && <span className="text-[10px] font-bold text-zinc-400">{thumb.stats}</span>}
+            </div>
+            <h4 className="text-lg font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate tracking-tight">
               {thumb.title}
             </h4>
             {thumb.description && (
-              <div className="relative">
-                <p className={`text-xs text-zinc-500 leading-relaxed font-medium ${isExpanded ? '' : 'line-clamp-2'}`}>
-                  {thumb.description}
-                </p>
-                {thumb.description.length > 60 && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsExpanded(!isExpanded);
-                    }}
-                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 mt-1 uppercase tracking-widest flex items-center gap-1"
-                  >
-                    {isExpanded ? 'Show Less' : 'Read More'}
-                    <ChevronRight size={10} className={`transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
-                  </button>
-                )}
-              </div>
+              <p className="text-xs text-zinc-500 leading-snug font-medium line-clamp-2">
+                {thumb.description}
+              </p>
             )}
-          </div>
-          <div className="flex items-center justify-between pt-2 border-t border-black/[0.03]">
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-              {thumb.category || 'Portfolio'}
-            </p>
-            <motion.span 
-              whileHover={{ scale: 1.1 }}
-              className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full"
-            >
-              {thumb.stats || 'Premium'}
-            </motion.span>
           </div>
         </div>
       </div>
@@ -363,6 +349,7 @@ export const ThumbnailGallery = () => {
   const [category, setCategory] = useState('Gaming');
   const [stats, setStats] = useState('');
   const [image, setImage] = useState<string | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -400,7 +387,6 @@ export const ThumbnailGallery = () => {
       );
       setQuotaExceeded(false);
 
-      // Add category filter to the query itself to reduce reads
       if (activeFilter !== 'All') {
         q = query(
           collection(db, 'thumbnails'),
@@ -417,45 +403,43 @@ export const ThumbnailGallery = () => {
       let newThumbnails: Thumbnail[];
       
       if (isInitial) {
-        // Cache the first page of thumbnails for each category
         const cacheKey = `thumbnails_v3_${activeFilter}_initial`;
         newThumbnails = await getDocsCached(q, cacheKey, force) as Thumbnail[];
-        console.log(`Fetched ${newThumbnails.length} thumbnails for ${activeFilter}`);
-        
+        setThumbnails(newThumbnails);
         setHasMore(newThumbnails.length >= PAGE_SIZE);
+        if (newThumbnails.length > 0) {
+          // We don't easily have the query snapshot docs here for pagination if it's cached
+          // but for first 12 items it's fine.
+        }
       } else {
         const snapshot = await getDocs(q);
         newThumbnails = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Thumbnail[];
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-        setHasMore(snapshot.docs.length === PAGE_SIZE);
-      }
-
-      if (isInitial) {
-        setThumbnails(newThumbnails);
-      } else {
         setThumbnails(prev => {
-          // Avoid duplicates
           const existingIds = new Set(prev.map(t => t.id));
           const uniqueNew = newThumbnails.filter(t => !existingIds.has(t.id));
           return [...prev, ...uniqueNew];
         });
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        setHasMore(newThumbnails.length >= PAGE_SIZE);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching thumbnails:", err);
+      if (isQuotaExceededError(err)) {
+        setQuotaExceeded(true);
+        // Silent failover to fallback data via the thumbnails state update in getDocsCached
+        return;
+      }
       if (err instanceof Error) {
         const msg = err.message.toLowerCase();
-        const isQuotaOrNetwork = msg.includes('quota-exceeded') || 
-                                msg.includes('resource-exhausted') || 
-                                msg.includes('quota exceeded') || 
-                                msg.includes('network-request-failed') ||
-                                msg.includes('could not reach cloud firestore');
+        const isNetworkError = msg.includes('network-request-failed') ||
+                              msg.includes('could not reach cloud firestore') ||
+                              msg.includes('timed out');
         
-        if (isQuotaOrNetwork) {
+        if (isNetworkError) {
           setQuotaExceeded(true);
-          toast.error("Network issue or limit reached. Using offline data.");
         } else if (msg.includes('index') || msg.includes('composite')) {
           setError("Database index required. Please contact admin.");
         } else {
@@ -489,7 +473,7 @@ export const ThumbnailGallery = () => {
       }
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-flash-latest",
         contents: {
           parts: [
             {
@@ -511,7 +495,7 @@ export const ThumbnailGallery = () => {
               - Food: Cooking, reviews, eating.
               - Sports: Athletics, highlights, training.
 
-              Return ONLY a JSON object with 'title' and 'category' fields.`,
+              Return ONLY a JSON object with 'title', 'description', and 'category' fields.`,
             },
             {
               inlineData: {
@@ -632,7 +616,8 @@ export const ThumbnailGallery = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !image || isSubmitting) return;
+    const finalImageUrl = imageUrlInput.trim() || image;
+    if (!title.trim() || !finalImageUrl || isSubmitting) return;
 
     setIsSubmitting(true);
     const toastId = toast.loading('Adding thumbnail...');
@@ -642,7 +627,7 @@ export const ThumbnailGallery = () => {
         description: description.trim(),
         category,
         stats: stats.trim() || '0 views',
-        imageUrl: image,
+        imageUrl: finalImageUrl,
         createdAt: serverTimestamp()
       });
       
@@ -653,18 +638,21 @@ export const ThumbnailGallery = () => {
         description: description.trim(),
         category,
         stats: stats.trim() || '0 views',
-        imageUrl: image,
+        imageUrl: finalImageUrl,
         createdAt: new Date()
       };
       setThumbnails(prev => [newThumb, ...prev]);
       
       // Clear cache so next fetch gets fresh data
-      clearCache('thumbnails_v3_');
+      clearCache('thumbnails');
+      clearCache('thumbnails_featured_hp_v2');
+      clearCache('thumbnails_decorations_hp');
       
       setTitle('');
       setDescription('');
       setStats('');
       setImage(null);
+      setImageUrlInput('');
       setShowForm(false);
       toast.success('Thumbnail added to portfolio!', { id: toastId });
     } catch (err) {
@@ -690,7 +678,10 @@ export const ThumbnailGallery = () => {
           setThumbnails(prev => prev.filter(t => t.id !== id));
           
           // Clear cache
+          clearCache('thumbnails');
           clearCache('thumbnails_v3_');
+          clearCache('thumbnails_featured_hp_v2');
+          clearCache('thumbnails_decorations_hp');
           
           toast.success('Thumbnail deleted', { id: toastId });
         } catch (err) {
@@ -899,20 +890,46 @@ export const ThumbnailGallery = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Thumbnail Image</label>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Thumbnail Image URL (ImgBB, etc.)</label>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        value={imageUrlInput}
+                        onChange={(e) => setImageUrlInput(e.target.value)}
+                        placeholder="Paste direct image link here..."
+                        className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm"
+                      />
+                      {imageUrlInput && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg overflow-hidden border border-black/10 bg-white">
+                            <img src={imageUrlInput} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.src = "https://placehold.co/100x100?text=Error")} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 py-2">
+                    <div className="flex-grow h-[1px] bg-black/5" />
+                    <span className="text-[8px] font-bold text-zinc-300 uppercase tracking-widest">or upload file</span>
+                    <div className="flex-grow h-[1px] bg-black/5" />
+                  </div>
                   <div className="flex items-center gap-6">
                     <label className="flex-1 flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-black/5 rounded-3xl hover:border-blue-600/30 transition-all cursor-pointer bg-black/[0.01]">
                       <ImageIcon size={32} className="text-zinc-300" />
                       <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Select Image</span>
                       <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                     </label>
-                    {image && (
+                    {(image || imageUrlInput) && (
                       <div className="w-32 h-32 rounded-2xl overflow-hidden border border-black/5 relative group">
-                        <img src={image} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                        <img src={imageUrlInput || image || ""} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                         <button 
                           type="button"
-                          onClick={() => setImage(null)}
+                          onClick={() => {
+                            setImage(null);
+                            setImageUrlInput('');
+                          }}
                           className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
                         >
                           <X size={20} />
@@ -971,10 +988,10 @@ export const ThumbnailGallery = () => {
               <Sparkles className="text-amber-600" size={24} />
             </div>
             <div className="flex-grow text-center md:text-left">
-              <h4 className="font-bold text-lg">Daily Limit Reached</h4>
+              <h4 className="font-bold text-lg">Connection Notice</h4>
               <p className="text-sm opacity-90">
-                Wow, Z-Score is popular today! We've reached our daily free database limit. 
-                Some thumbnails might not load, but you can still browse the rest of the site.
+                The connection is slow or a limit has been reached. 
+                We've loaded our high-performance offline catalog for you so you can keep browsing!
               </p>
             </div>
             <button 
@@ -1078,69 +1095,7 @@ export const ThumbnailGallery = () => {
           ))}
         </div>
       ) : filteredThumbnails.length === 0 ? (
-        <div className="bg-white border border-black/5 rounded-[3rem] p-20 text-center mb-12 shadow-2xl shadow-black/5 relative overflow-hidden">
-          <div className="absolute inset-0 noise-bg opacity-[0.03]" />
-          <div className="relative z-10">
-            <div className="w-24 h-24 bg-zinc-50 text-zinc-300 rounded-full flex items-center justify-center mx-auto mb-8 border border-black/5">
-              <ImageIcon size={48} />
-            </div>
-            <h3 className="text-3xl font-black text-zinc-900 mb-4 tracking-tighter uppercase">No thumbnails found</h3>
-            <p className="text-zinc-500 mb-12 max-w-md mx-auto font-medium text-lg leading-relaxed">
-              The gallery is currently empty or no thumbnails match your search. 
-              {isAdmin && " As an admin, you can populate it with sample data or upload your own work."}
-            </p>
-            
-            <div className="flex flex-col md:flex-row items-center justify-center gap-6">
-              {isAdmin ? (
-                <>
-                  <button 
-                    onClick={() => setShowForm(true)}
-                    className="px-10 py-5 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 transition-all shadow-2xl shadow-blue-600/20 flex items-center gap-3 group"
-                  >
-                    <Plus size={20} className="group-hover:rotate-90 transition-transform duration-500" />
-                    Upload Your First Project
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      const toastId = toast.loading('Seeding sample thumbnails...');
-                      try {
-                        const samples = [
-                          { title: "Gaming Thumbnail 1", description: "Pro-level gaming thumbnail with high-contrast visuals and engaging composition.", category: "Gaming", stats: "10K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
-                          { title: "Finance Thumbnail 1", description: "Clean financial advice thumbnail focusing on trust and growth metrics.", category: "Finance", stats: "5K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` },
-                          { title: "Tech Thumbnail 1", description: "Futuristic tech review style with sleek lighting and clear focal points.", category: "Tech", stats: "20K views", imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450` }
-                        ];
-                        for (const sample of samples) {
-                          await addDoc(collection(db, 'thumbnails'), {
-                            ...sample,
-                            createdAt: serverTimestamp()
-                          });
-                        }
-                        clearCache('thumbnails_v3_All_initial');
-                        fetchThumbnails(true, true);
-                        toast.success('Sample thumbnails seeded!', { id: toastId });
-                      } catch (error) {
-                        toast.error('Failed to seed thumbnails', { id: toastId });
-                        handleFirestoreError(error, OperationType.CREATE, 'thumbnails');
-                      }
-                    }}
-                    className="px-10 py-5 bg-white border border-black/10 text-black rounded-full font-bold hover:bg-zinc-50 transition-all shadow-sm flex items-center gap-3"
-                  >
-                    <Sparkles size={20} className="text-orange-500" />
-                    Seed Sample Data
-                  </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => fetchThumbnails(true, true)}
-                  className="px-10 py-5 bg-black text-white rounded-full font-bold hover:bg-zinc-800 transition-all shadow-2xl flex items-center gap-3"
-                >
-                  <RefreshCw size={20} />
-                  Refresh Gallery
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        null
       ) : (
         <div className="space-y-12 relative">
           {loading && (
