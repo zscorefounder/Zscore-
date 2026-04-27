@@ -1355,7 +1355,8 @@ const FeaturedWork = () => {
     fetchFeatured();
   }, []);
 
-  if (isLoading) return <ZPageLoader />;
+  // Removed full section loader as per user request
+  // if (isLoading) return <ZPageLoader />;
   
   return (
     <section className="py-20 bg-white relative overflow-hidden">
@@ -2989,8 +2990,8 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('home');
-  const [isLoading, setIsLoading] = useState(true);
-  const [initialProgress, setInitialProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [initialProgress, setInitialProgress] = useState(100);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -3049,7 +3050,7 @@ export default function App() {
         <meta name="twitter:description" content="High-performance thumbnail designs and psychological visual hooks for top creators." />
       </Helmet>
       <AnimatePresence mode="wait">
-        {isLoading && <LoadingScreen key="loader" progress={initialProgress} />}
+        {/* Loading Screen disabled as per user request */}
       </AnimatePresence>
 
       <WaterBackground />

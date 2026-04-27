@@ -1143,11 +1143,12 @@ export const ThumbnailGallery = () => {
         </div>
       ) : (
         <div className="space-y-12 relative">
-          {loading && (
+          {/* Loading status (removed overlay spinner as per request) */}
+          {/* {loading && (
             <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-40 flex items-center justify-center rounded-3xl">
               <ZSpinner size={60} />
             </div>
-          )}
+          )} */}
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-12 py-10">
             {filteredThumbnails.map((thumb, i) => (
