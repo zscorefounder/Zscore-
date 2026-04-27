@@ -91,7 +91,7 @@ async function testConnection() {
       // Use a race to timeout the connection test faster than the default 10s
       const pingPromise = getDocFromServer(doc(db, '_connection_test_', 'ping'));
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timed out')), 5000)
+        setTimeout(() => reject(new Error('Connection timed out')), 10000)
       );
 
       await Promise.race([pingPromise, timeoutPromise]);
@@ -113,8 +113,8 @@ async function testConnection() {
         console.warn(`Firestore connection ${err.code}. Retrying... (${retries} left)`);
         retries--;
         await new Promise(resolve => setTimeout(resolve, 3000)); 
-      } else if (isNetworkError || err.message?.includes('the client is offline')) {
-        console.warn("Firestore/Auth: Network request failed. Entering offline mode.");
+      } else if (isNetworkError || err.message?.includes('the client is offline') || err.message?.includes('timed out')) {
+        console.warn("Firestore/Auth: Connection timed out or offline. Entering offline mode.");
         setFirestoreStatus(false);
         // Do not show error toast for expected sandbox network limitations
         return;
@@ -209,13 +209,13 @@ export function clearCache(cacheKeyPrefix?: string) {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.includes(`fs_cache_${cacheKeyPrefix}`)) {
+      if (key && (key.includes(`fs_cache_${cacheKeyPrefix}`) || key.includes(cacheKeyPrefix))) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
   } else {
-    // Clear all
+    // Clear everything
     firestoreCache.clear();
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -225,7 +225,6 @@ export function clearCache(cacheKeyPrefix?: string) {
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    toast.success('Cache cleared successfully');
   }
 }
 
@@ -245,26 +244,32 @@ async function fetchAndCache(q: any, cacheKey: string) {
     );
 
     const snapshot = await Promise.race([fetchPromise, timeoutPromise]) as any;
+    console.log(`Firebase: Fetch for ${cacheKey} successful. Docs: ${snapshot.docs?.length || 0}`);
     const data = snapshot.docs.map((doc: any) => ({
       id: doc.id,
-      ...(doc.data() as any)
+      ...(doc.data() as any),
+      isLive: true // Explicitly mark as live data
     }));
     
+    if (!data || data.length === 0) {
+      console.warn(`Firebase: Fetch success but empty results for ${cacheKey}`);
+      return [];
+    }
+
     const cacheEntry = { data, timestamp: Date.now() };
     firestoreCache.set(cacheKey, cacheEntry);
     
     try {
       localStorage.setItem(`fs_cache_${cacheKey}`, JSON.stringify(cacheEntry));
     } catch (e) {
-      // Clear old cache if full
-      console.warn("LocalStorage full, clearing old cache...");
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith('fs_cache_')) {
-          localStorage.removeItem(key);
-        }
-      }
+      // If quota exceeded in localStorage, clear all caches and retry once
       try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('fs_cache_')) {
+            localStorage.removeItem(key!);
+          }
+        }
         localStorage.setItem(`fs_cache_${cacheKey}`, JSON.stringify(cacheEntry));
       } catch (e2) {}
     }
@@ -296,27 +301,24 @@ export function isQuotaExceededError(error: any): boolean {
 }
 
 // Hardcoded fallback data for maximum resilience (Quota exceeded or Offline)
-const FALLBACK_DATA: Record<string, any[]> = {
+export const FALLBACK_DATA: Record<string, any[]> = {
   'thumbnails': [
-    { id: 'fb_1', isFallback: true, title: "I Spent 100 Days in a Secret Bunker", description: "Extreme lighting and depth-focused gaming thumbnail.", category: "Gaming", imageUrl: "https://i.ibb.co/5Xd8rDDZ/image.png", stats: "14.2% CTR", createdAt: { seconds: Date.now()/1000 - 1000 } },
-    { id: 'fb_2', isFallback: true, title: "The Crypto Crash: Real Analysis", description: "Clean data visualization for high-stakes finance.", category: "Finance", imageUrl: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR", createdAt: { seconds: Date.now()/1000 - 2000 } },
-    { id: 'fb_3', isFallback: true, title: "AI Design Revolution 2026", description: "Futuristic tech aesthetic with sharp neon accents.", category: "Tech", imageUrl: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR", createdAt: { seconds: Date.now()/1000 - 3000 } },
-    { id: 'fb_4', isFallback: true, title: "Premium Visual Identity", description: "High-end brand showcase for luxury clients.", category: "Entertainment", imageUrl: "https://i.ibb.co/qXFY4XD/dposa-s.png", stats: "Premium", createdAt: { seconds: Date.now()/1000 - 4000 } },
-    { id: 'fb_5', isFallback: true, title: "Digital Strategy Mastery", description: "Clean, impactful logo and text placement.", category: "Business", imageUrl: "https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png", stats: "Modern", createdAt: { seconds: Date.now()/1000 - 5000 } },
-    { id: 'fb_6', isFallback: true, title: "Viral Fitness Transformation", description: "High-energy sports thumbnail with grit.", category: "Sports", imageUrl: "https://i.ibb.co/6J4CbdQf/image.png", stats: "400K+ Views", createdAt: { seconds: Date.now()/1000 - 6000 } },
-    { id: 'fb_7', isFallback: true, title: "Global Adventure Vlog", description: "Lush travel photography with immersive hooks.", category: "Travel", imageUrl: "https://i.ibb.co/rR6LmpRm/image.png", stats: "15% Growth", createdAt: { seconds: Date.now()/1000 - 7000 } },
-    { id: 'fb_8', isFallback: true, title: "Technical Setup Showcase", description: "Pro tech gear with sharp, industrial lighting.", category: "Tech", imageUrl: "https://i.ibb.co/NdXYBpM4/image.png", stats: "Elite", createdAt: { seconds: Date.now()/1000 - 8000 } },
-    { id: 'fb_9', isFallback: true, title: "Creative Process Walkthrough", description: "Clean, educational layout for artists.", category: "Education", imageUrl: "https://i.ibb.co/ddJ5FDm/image.png", stats: "Viral Hit", createdAt: { seconds: Date.now()/1000 - 9000 } },
-    { id: 'fb_10', isFallback: true, title: "Culinary Arts & Styling", description: "Appetizing textures and high-contrast food shots.", category: "Food", imageUrl: "https://picsum.photos/seed/food9/800/450", stats: "Delicious", createdAt: { seconds: Date.now()/1000 - 10000 } },
-    { id: 'fb_11', isFallback: true, title: "Minimalist Music Visuals", description: "Soft, emotional tones for music producers.", category: "Music", imageUrl: "https://picsum.photos/seed/music2/800/450", stats: "Trending", createdAt: { seconds: Date.now()/1000 - 11000 } },
-    { id: 'fb_12', isFallback: true, title: "Morning Routine Excellence", description: "Soft-lit vlog style for lifestyle creators.", category: "Vlog", imageUrl: "https://picsum.photos/seed/vlog3/800/450", stats: "Clean", createdAt: { seconds: Date.now()/1000 - 12000 } }
+    { id: 'fb_1', isFallback: true, title: "I Spent 100 Days in a Secret Bunker", description: "Extreme lighting and depth-focused gaming thumbnail.", category: "Gaming", imageUrl: "https://picsum.photos/seed/bunker/800/450", stats: "14.2% CTR", createdAt: { seconds: Date.now()/1000 - 1000 } },
+    { id: 'fb_2', isFallback: true, title: "The Crypto Crash: Real Analysis", description: "Clean data visualization for high-stakes finance.", category: "Finance", imageUrl: "https://picsum.photos/seed/crypto/800/450", stats: "12.8% CTR", createdAt: { seconds: Date.now()/1000 - 2000 } },
+    { id: 'fb_3', isFallback: true, title: "AI Design Revolution 2026", description: "Futuristic tech aesthetic with sharp neon accents.", category: "Tech", imageUrl: "https://picsum.photos/seed/ai/800/450", stats: "10.5% CTR", createdAt: { seconds: Date.now()/1000 - 3000 } },
+    { id: 'fb_4', isFallback: true, title: "Premium Visual Identity", description: "High-end brand showcase for luxury clients.", category: "Entertainment", imageUrl: "https://picsum.photos/seed/premium/800/450", stats: "Premium", createdAt: { seconds: Date.now()/1000 - 4000 } },
+    { id: 'fb_5', isFallback: true, title: "Digital Strategy Mastery", description: "Clean, impactful logo and text placement.", category: "Business", imageUrl: "https://picsum.photos/seed/digital/800/450", stats: "Modern", createdAt: { seconds: Date.now()/1000 - 5000 } },
+    { id: 'fb_6', isFallback: true, title: "Viral Fitness Transformation", description: "High-energy sports thumbnail with grit.", category: "Sports", imageUrl: "https://picsum.photos/seed/fitness/800/450", stats: "400K+ Views", createdAt: { seconds: Date.now()/1000 - 6000 } },
+    { id: 'fb_7', isFallback: true, title: "Global Adventure Vlog", description: "Lush travel photography with immersive hooks.", category: "Travel", imageUrl: "https://picsum.photos/seed/travel/800/450", stats: "15% Growth", createdAt: { seconds: Date.now()/1000 - 7000 } },
+    { id: 'fb_8', isFallback: true, title: "Technical Setup Showcase", description: "Pro tech gear with sharp, industrial lighting.", category: "Tech", imageUrl: "https://picsum.photos/seed/tech/800/450", stats: "Elite", createdAt: { seconds: Date.now()/1000 - 8000 } },
+    { id: 'fb_9', isFallback: true, title: "Creative Process Walkthrough", description: "Clean, educational layout for artists.", category: "Education", imageUrl: "https://picsum.photos/seed/education/800/450", stats: "Viral Hit", createdAt: { seconds: Date.now()/1000 - 9000 } },
   ],
   'hero': [
-    { id: 'fallback_h1', isFallback: true, url: "https://i.ibb.co/5Xd8rDDZ/image.png", rotate: -2, x: 0, y: 0, createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fallback_h2', isFallback: true, url: "https://i.ibb.co/V0nZTDcZ/image.png", rotate: 5, x: 20, y: 10, createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fallback_h3', isFallback: true, url: "https://i.ibb.co/rKFrLL2S/image.png", rotate: -4, x: -20, y: 5, createdAt: { seconds: Date.now()/1000 } }
+    { id: 'fallback_h1', isFallback: true, imageUrl: "https://picsum.photos/seed/hero1/800/450", rotate: -2, x: 0, y: 0, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fallback_h2', isFallback: true, imageUrl: "https://picsum.photos/seed/hero2/800/450", rotate: 5, x: 20, y: 10, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fallback_h3', isFallback: true, imageUrl: "https://picsum.photos/seed/hero3/800/450", rotate: -4, x: -20, y: 5, createdAt: { seconds: Date.now()/1000 } }
   ],
-  'bts': [
+  'behind_the_scenes': [
     { 
       id: 'fallback_bts1', 
       isFallback: true,
@@ -328,97 +330,104 @@ const FALLBACK_DATA: Record<string, any[]> = {
       category: "Case Study",
       clientName: "Bunker Chronicles",
       clientPhoto: "https://i.ibb.co/qXFY4XD/dposa-s.png",
-      layoutIdea: "Deep Extraction",
-      designWorkflow: "Concept -> 3D Lighting -> Frame Polish",
-      clientFeedback: "Absolutely game changing results.",
-      whatsappChat: [{ role: 'client', text: "CTR is vertical right now!", time: "10:00 AM" }],
+      layoutIdea: "Deep Extraction: We used layers of shadow to create a sense of mystery. By focusing the light solely on the character's face, we forced the viewer to make eye contact, which is proven to increase click-through rates by 22% in the gaming niche.",
+      designWorkflow: "1. Raw Screenshots extraction\n2. 3D Lighting setup in Photoshop\n3. Color grading for intensity\n4. Final Typography polish",
+      caseStudy: "## The Objective\n\nThe client wanted a thumbnail that looked more like a movie poster than a typical gaming screenshot. We needed to convey isolation, depth, and high stakes.\n\n## Our Approach\n\nWe implemented a three-point lighting system using only layer masks and glow effects. By isolating the background with a slight blur, we separated the subject from the noise, creating a '3D Pop' effect that stands out on the YouTube homepage.\n\n## The Result\n\nThe video reached 1 million views in 48 hours with a steady 14.5% CTR.",
+      clientFeedback: "Absolutely game changing results. The CTR has never been this high for our long-form content.",
+      whatsappChat: [
+        { role: 'client', text: "Hey! Can we make the bunker look more dark? Like more mysterious?", time: "10:00 AM" },
+        { role: 'designer', text: "On it. I'll add some heavy shadows and a slight blue tint for that 'cold' isolation feel.", time: "10:15 AM" },
+        { role: 'designer', text: "How does this version look?", time: "11:30 AM" },
+        { role: 'client', text: "CTR is vertical right now! This is perfect! 🔥", time: "12:00 PM" }
+      ],
       createdAt: { seconds: Date.now()/1000 }
     },
     { 
       id: 'fallback_bts2', 
       isFallback: true,
       title: "Clean Finance Aesthetic", 
-      description: "Establishing trust and authority through minimalist data visualization.",
+      description: "Establishing trust and authority through minimalist data visualization and professional color theory.",
       imageUrl: "https://i.ibb.co/V0nZTDcZ/image.png",
       beforeImages: ["https://picsum.photos/seed/bts_b2/800/450"],
       afterImages: ["https://i.ibb.co/V0nZTDcZ/image.png"],
       category: "Process",
       clientName: "Crypto Daily",
       clientPhoto: "https://i.ibb.co/qXFY4XD/dposa-s.png",
+      layoutIdea: "Authority Design: In finance, 'Less is More'. We avoided the typical 'flashing red' arrows and went for a sophisticated, institutional design that appeals to serious investors.",
+      designWorkflow: "Clean Vector lines -> Subtle Gradients -> High Contrast Typography",
+      createdAt: { seconds: Date.now()/1000 }
+    },
+    { 
+      id: 'fallback_bts3', 
+      isFallback: true,
+      title: "AI & The Future", 
+      description: "Creating a tech-forward visual language for educational content about artificial intelligence.",
+      imageUrl: "https://i.ibb.co/rKFrLL2S/image.png",
+      beforeImages: ["https://picsum.photos/seed/bts_b3/800/450"],
+      afterImages: ["https://i.ibb.co/rKFrLL2S/image.png"],
+      category: "Tech",
+      clientName: "Future Tech",
+      clientPhoto: "https://i.ibb.co/qXFY4XD/dposa-s.png",
       createdAt: { seconds: Date.now()/1000 }
     }
   ],
   'random': [
-    { id: 'fallback_r1', isFallback: true, title: "Creative Layout", desc: "Minimalist approach.", image: "https://i.ibb.co/5Xd8rDDZ/image.png", rotate: -5, y: 0, createdAt: { seconds: Date.now()/1000 } },
-    { id: 'fallback_r2', isFallback: true, title: "Color Theory", desc: "Vibrant palettes.", image: "https://i.ibb.co/V0nZTDcZ/image.png", rotate: 3, y: 20, createdAt: { seconds: Date.now()/1000 } }
+    { id: 'fallback_r1', isFallback: true, title: "Creative Layout", description: "Minimalist approach.", imageUrl: "https://picsum.photos/seed/random1/800/450", rotate: -5, y: 0, createdAt: { seconds: Date.now()/1000 } },
+    { id: 'fallback_r2', isFallback: true, title: "Color Theory", description: "Vibrant palettes.", imageUrl: "https://picsum.photos/seed/random2/800/450", rotate: 3, y: 20, createdAt: { seconds: Date.now()/1000 } }
   ]
 };
 
 export async function getDocsCached(q: any, cacheKey: string, force = false) {
   const now = Date.now();
   
+  const getFallback = () => {
+    const coll = cacheKey.split('_')[0];
+    const coll2 = cacheKey.startsWith('behind_the_scenes') ? 'behind_the_scenes' : coll;
+    const fallback = FALLBACK_DATA[coll2] || FALLBACK_DATA[coll] || FALLBACK_DATA['thumbnails'] || [];
+    console.log(`Firebase: Providing fallback for ${cacheKey} (${fallback.length} items)`);
+    return fallback;
+  };
+
   if (!force) {
     const cached = firestoreCache.get(cacheKey);
-    if (cached) {
+    if (cached && cached.data && cached.data.length > 0) {
       const age = now - cached.timestamp;
-      const isFallback = cached.data.length > 0 && (cached.data[0].isFallback || String(cached.data[0].id).startsWith('fb') || String(cached.data[0].id).startsWith('fallback'));
+      const isFallback = cached.data[0].isFallback || String(cached.data[0].id).startsWith('fb');
       if (age < CACHE_TTL && !isFallback) {
-        if (age > REFRESH_THRESHOLD) {
-          fetchAndCache(q, cacheKey).catch(e => console.warn("BG Refresh failed", e));
-        }
+        if (age > REFRESH_THRESHOLD) fetchAndCache(q, cacheKey).catch(() => {});
         return cached.data;
       }
     }
 
-    let localData = null;
     try {
       const local = localStorage.getItem(`fs_cache_${cacheKey}`);
       if (local) {
         const parsed = JSON.parse(local);
-        const age = now - parsed.timestamp;
-        const isFallback = parsed.data.length > 0 && (parsed.data[0].isFallback || String(parsed.data[0].id).startsWith('fb') || String(parsed.data[0].id).startsWith('fallback'));
-        if (age < CACHE_TTL && !isFallback) {
-          if (age > REFRESH_THRESHOLD) {
-            fetchAndCache(q, cacheKey).catch(err => console.warn("BG Refresh failed", err));
+        if (parsed.data && parsed.data.length > 0) {
+          const age = now - parsed.timestamp;
+          const isFallback = parsed.data[0].isFallback || String(parsed.data[0].id).startsWith('fb');
+          if (age < CACHE_TTL && !isFallback) {
+            if (age > REFRESH_THRESHOLD) fetchAndCache(q, cacheKey).catch(() => {});
+            return parsed.data;
           }
-          return parsed.data;
         }
-        localData = parsed.data;
       }
     } catch (e) {}
-
-    try {
-      // Use local data ONLY if it's not a fallback
-      const localIsFallback = localData && localData.length > 0 && (localData[0].isFallback || String(localData[0].id).startsWith('fb') || String(localData[0].id).startsWith('fallback'));
-      if (localData && localData.length > 0 && !localIsFallback) {
-        fetchAndCache(q, cacheKey).catch(err => console.warn("BG Refresh failed", err));
-        return localData;
-      }
-
-      const data = await fetchAndCache(q, cacheKey);
-      return data || [];
-    } catch (error) {
-      console.warn(`Initial fetch failed for ${cacheKey}, attempting fallback:`, (error as Error).message);
-      if (localData && localData.length > 0) return localData;
-      if (cached && cached.data.length > 0) return cached.data;
-      
-      const coll = cacheKey.split('_')[0]; 
-      if (FALLBACK_DATA[coll]) return FALLBACK_DATA[coll];
-      if (cacheKey.includes('thumbnails') && FALLBACK_DATA['thumbnails']) return FALLBACK_DATA['thumbnails'];
-      
-      // If we've reached here and it's a thumbnail query, return empty rather than crashing
-      return [];
-    }
   }
 
   try {
     const data = await fetchAndCache(q, cacheKey);
-    return data || [];
+    if (!data || data.length === 0) return getFallback();
+    return data;
   } catch (error) {
-    console.warn(`Forced fetch failed for ${cacheKey}, using fallback:`, (error as Error).message);
-    const coll = cacheKey.split('_')[0];
-    if (FALLBACK_DATA[coll]) return FALLBACK_DATA[coll];
-    if (cacheKey.includes('thumbnails') && FALLBACK_DATA['thumbnails']) return FALLBACK_DATA['thumbnails'];
-    return [];
+    console.warn(`Firebase: Fetch for ${cacheKey} failed, entering fallback mode. Error:`, (error as Error).message);
+    try {
+      const local = localStorage.getItem(`fs_cache_${cacheKey}`);
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed.data && parsed.data.length > 0) return parsed.data;
+      }
+    } catch (e) {}
+    return getFallback();
   }
 }

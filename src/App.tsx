@@ -50,7 +50,8 @@ import {
   LogIn,
   LogOut,
   Mic,
-  MicOff
+  MicOff,
+  AlertCircle
 } from 'lucide-react';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
@@ -68,11 +69,13 @@ import {
   getDocsCached,
   handleFirestoreError,
   OperationType,
-  isQuotaExceededError
+  isQuotaExceededError,
+  FALLBACK_DATA
 } from './firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { ThumbnailGallery } from './components/ThumbnailGallery';
+import { ThumbnailGallery, ThumbnailItem, Thumbnail } from './components/ThumbnailGallery';
 import { CommentsSection } from './components/CommentsSection';
+import { BTSDetailModal } from './components/BTSDetailModal';
 import { WaterBackground } from './components/WaterBackground';
 import { FogEffect } from './components/FogEffect';
 import { PushPin } from './components/PushPin';
@@ -1230,12 +1233,13 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
 const FeaturedCaseStudies = () => {
   const [studies, setStudies] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedStudy, setSelectedStudy] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchStudies = async () => {
       try {
-        const q = query(collection(db, 'bts'), orderBy('createdAt', 'desc'), limit(3));
-        const data = await getDocsCached(q, 'bts_featured_hp', true);
+        const q = query(collection(db, 'behind_the_scenes'), orderBy('createdAt', 'desc'), limit(3));
+        const data = await getDocsCached(q, 'behind_the_scenes_featured_hp', true);
         setStudies(data);
       } catch (err) {
         console.error("Failed to fetch featured studies:", err);
@@ -1253,7 +1257,15 @@ const FeaturedCaseStudies = () => {
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex flex-col md:flex-row items-end justify-between mb-16 gap-6">
           <div className="space-y-4">
-            <h3 className="text-blue-600 font-bold uppercase tracking-[0.3em] text-xs">Deep Dives</h3>
+            <div className="flex items-center gap-4">
+              <h3 className="text-blue-600 font-bold uppercase tracking-[0.3em] text-xs">Deep Dives</h3>
+              {studies.length > 0 && studies[0].isFallback && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse">
+                  <AlertCircle size={10} />
+                  Demo Mode
+                </div>
+              )}
+            </div>
             <h2 className="text-4xl md:text-6xl font-display font-black text-[#1A1A1A]">
               PROCESS & <br /><span className="text-blue-600">STRATEGY.</span>
             </h2>
@@ -1275,7 +1287,8 @@ const FeaturedCaseStudies = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="group bg-white rounded-3xl p-4 border border-black/5 hover:border-blue-600/20 transition-all duration-500 shadow-xl hover:shadow-2xl"
+              onClick={() => setSelectedStudy(study)}
+              className="group bg-white rounded-3xl p-4 border border-black/5 hover:border-blue-600/20 transition-all duration-500 shadow-xl hover:shadow-2xl cursor-pointer"
             >
               <div className="aspect-video rounded-2xl overflow-hidden mb-6 relative">
                 <img 
@@ -1309,6 +1322,7 @@ const FeaturedCaseStudies = () => {
           ))}
         </div>
       </div>
+      <BTSDetailModal content={selectedStudy} onClose={() => setSelectedStudy(null)} />
     </section>
   );
 };
@@ -1320,23 +1334,20 @@ const FeaturedWork = () => {
   useEffect(() => {
     const fetchFeatured = async () => {
       try {
+        console.log("FeaturedWork: Starting fetch...");
         const q = query(
           collection(db, 'thumbnails'),
           orderBy('createdAt', 'desc'),
           limit(48)
         );
-        const data = await getDocsCached(q, 'thumbnails_featured_hp_v2', true); // Force fresh fetch on home page
+        const data = await getDocsCached(q, 'thumbnails_featured_hp_v2', true);
+        console.log(`FeaturedWork: Received ${data.length} thumbnails`);
+        
+        // If the first item is a fallback, we keep showing demo mode if we want,
+        // but typically HP just shows what it gets.
         setThumbnails(data);
       } catch (err) {
-        if (isQuotaExceededError(err)) {
-          console.warn("FeaturedWork: Quota exceeded, using fallback via getDocsCached");
-          // Try to get from cache without forcing refresh as a last resort
-          const fallback = await getDocsCached(query(collection(db, 'thumbnails'), orderBy('createdAt', 'desc'), limit(48)), 'thumbnails_featured_hp_v2', false);
-          setThumbnails(fallback);
-          return;
-        }
-        console.error("Failed to fetch featured thumbnails:", err);
-        handleFirestoreError(err, OperationType.GET, 'thumbnails');
+        console.error("FeaturedWork Error:", err);
       } finally {
         setIsLoading(false);
       }
@@ -1376,39 +1387,17 @@ const FeaturedWork = () => {
             <p className="text-zinc-400 font-medium">No live thumbnails found yet. Start uploading in the Work page!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
             {thumbnails.map((thumb, i) => (
-              <motion.div
+              <ThumbnailItem 
                 key={thumb.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="group"
-              >
-                <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/5 bg-zinc-900 shadow-2xl hover:border-blue-500/30 transition-all duration-500 mb-4">
-                  <img 
-                    src={thumb.imageUrl} 
-                    alt={thumb.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90 group-hover:opacity-100"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-linear-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                </div>
-                
-                <div className="px-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-blue-600/10 text-blue-600 text-[8px] font-black rounded uppercase tracking-widest">
-                      {thumb.category || 'Premium'}
-                    </span>
-                    {thumb.stats && <span className="text-[10px] text-zinc-500 font-bold tracking-tight">{thumb.stats}</span>}
-                  </div>
-                  <h4 className="text-[#1A1A1A] font-display font-bold text-lg leading-tight group-hover:text-blue-600 transition-colors duration-300 truncate">
-                    {thumb.title}
-                  </h4>
-                </div>
-              </motion.div>
+                thumb={thumb as Thumbnail}
+                i={i}
+                isAdmin={false}
+                refiningId={null}
+                handleRefine={() => {}}
+                handleDelete={() => {}}
+              />
             ))}
           </div>
         )}
@@ -1419,34 +1408,80 @@ const FeaturedWork = () => {
 
 const Hero = () => {
   const { scrollY } = useScroll();
-  const y1 = useTransform(scrollY, [0, 500], [0, 200]);
+  const [thumbnails, setThumbnails] = useState<any[]>([]);
   const yBg = useTransform(scrollY, [0, 1000], [0, -150]);
-  const yGlow1 = useTransform(scrollY, [0, 1000], [0, 100]);
-  const yGlow2 = useTransform(scrollY, [0, 1000], [0, -100]);
   const yFloating1 = useTransform(scrollY, [0, 1000], [0, -50]);
   const yFloating2 = useTransform(scrollY, [0, 1000], [0, 50]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
+  
+  useEffect(() => {
+    const fetchHeroData = async () => {
+      try {
+        // Use the generic thumbnails but limit to 10 for the hero
+        const q = query(
+          collection(db, 'thumbnails'), 
+          orderBy('createdAt', 'desc'),
+          limit(15)
+        );
+        const data = await getDocsCached(q, 'hero_floating_thumbnails');
+        setThumbnails(data);
+      } catch (err) {
+        console.warn("Hero fetch failed, using fallback:", err);
+      }
+    };
+    fetchHeroData();
+  }, []);
 
   return (
-    <section id="home" className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 overflow-hidden">
+    <section id="home" className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 overflow-hidden [perspective:1000px]">
       {/* Background Noise/Grain Overlay */}
       <motion.div 
         style={{ y: yBg }}
         className="absolute inset-0 opacity-[0.03] pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/p6.png')]" 
       />
 
-      {/* Background Glows (Subtle & Light) */}
+      {/* Floating Thumbnails as 3D Elements */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {thumbnails.map((thumb, i) => (
+          <motion.div
+            key={thumb.id || i}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ 
+              opacity: [0.1, 0.4, 0.1],
+              scale: [1, 1.1, 1],
+              y: [0, -20, 0],
+              rotate: [i % 2 === 0 ? -5 : 5, i % 2 === 0 ? 5 : -5, i % 2 === 0 ? -5 : 5]
+            }}
+            transition={{ 
+              duration: 10 + i * 2, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
+            style={{
+              position: 'absolute',
+              top: `${15 + (i * 15) % 70}%`,
+              left: `${10 + (i * 25) % 80}%`,
+              width: '240px',
+              zIndex: 0,
+              filter: 'blur(2px)',
+              pointerEvents: 'none'
+            }}
+            className="hidden lg:block opacity-20 grayscale brightness-50"
+          >
+            <div className="aspect-video bg-zinc-800 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+              <img 
+                src={thumb.imageUrl || thumb.image || (FALLBACK_DATA['thumbnails'][0] as any).imageUrl} 
+                className="w-full h-full object-cover opacity-50" 
+                alt="" 
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
       <motion.div 
-        style={{ y: yGlow1 }}
-        className="absolute top-1/4 -left-1/4 w-[500px] h-[500px] bg-blue-100/30 blur-[120px] rounded-full animate-pulse" 
-      />
-      <motion.div 
-        style={{ y: yGlow2 }}
-        className="absolute bottom-1/4 -right-1/4 w-[500px] h-[500px] bg-purple-100/30 blur-[120px] rounded-full animate-pulse delay-700" 
-      />
-      
-      <motion.div 
-        style={{ y: y1, opacity }}
+        style={{ opacity }}
         className="text-center z-10"
       >
         <motion.div

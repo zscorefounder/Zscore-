@@ -44,7 +44,7 @@ import { useAdmin } from '../hooks/useAdmin';
 import { useFirestoreStatus } from '../hooks/useFirestoreStatus';
 import { toast } from 'sonner';
 
-interface Thumbnail {
+export interface Thumbnail {
   id: string;
   title: string;
   description?: string;
@@ -122,7 +122,7 @@ const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 450, quali
   });
 };
 
-const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDelete }: { 
+export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDelete }: { 
   thumb: Thumbnail, 
   i: number, 
   isAdmin: boolean, 
@@ -197,7 +197,9 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
 
         <div className="aspect-video overflow-hidden relative bg-zinc-900 rounded-2xl border border-white/5 group-hover:border-blue-500/30 transition-all duration-500 shadow-2xl">
           {!isLoaded && !hasError && (
-            <ZSkeleton className="absolute inset-0 rounded-2xl" />
+            <div className="absolute inset-0 bg-zinc-800 animate-pulse flex items-center justify-center">
+              <ImageIcon className="text-zinc-700" size={32} />
+            </div>
           )}
           {hasError && (
             <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center p-4 text-center">
@@ -207,6 +209,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
           )}
             <motion.img 
               ref={imgRef}
+              key={thumb.id || thumb.imageUrl}
               src={thumb.imageUrl} 
               alt={thumb.title} 
               initial={{ opacity: 0 }}
@@ -214,6 +217,7 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
               transition={{ duration: 0.3 }}
               onLoad={() => setIsLoaded(true)}
               onError={() => {
+                console.error(`Image load error for: ${thumb.imageUrl}`);
                 setHasError(true);
                 setIsLoaded(true);
               }}
@@ -221,6 +225,20 @@ const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, handleDele
               referrerPolicy="no-referrer"
               loading={i < 8 ? "eager" : "lazy"}
             />
+          
+          {/* Status Badge */}
+          <div className="absolute bottom-4 right-4 z-40">
+            {thumb.isFallback ? (
+              <span className="px-2 py-1 bg-amber-500/20 backdrop-blur-md text-amber-500 text-[8px] font-black uppercase tracking-widest rounded border border-amber-500/30">
+                Demo Sample
+              </span>
+            ) : (
+              <span className="px-2 py-1 bg-green-500/20 backdrop-blur-md text-green-500 text-[8px] font-black uppercase tracking-widest rounded border border-green-500/30 flex items-center gap-1">
+                <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
+                Live Portfolio
+              </span>
+            )}
+          </div>
           
           {/* Subtle Overlay */}
           <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -406,6 +424,14 @@ export const ThumbnailGallery = () => {
         const cacheKey = `thumbnails_v3_${activeFilter}_initial`;
         newThumbnails = await getDocsCached(q, cacheKey, force) as Thumbnail[];
         setThumbnails(newThumbnails);
+        
+        // Disable demo mode alert if we have real data (not fallback)
+        const hasRealData = newThumbnails.length > 0 && !(newThumbnails[0] as any).isFallback;
+        if (hasRealData) {
+          setQuotaExceeded(false);
+        } else if (newThumbnails.length > 0 && (newThumbnails[0] as any).isFallback) {
+          setQuotaExceeded(true);
+        }
         setHasMore(newThumbnails.length >= PAGE_SIZE);
         if (newThumbnails.length > 0) {
           // We don't easily have the query snapshot docs here for pagination if it's cached
@@ -645,8 +671,10 @@ export const ThumbnailGallery = () => {
       
       // Clear cache so next fetch gets fresh data
       clearCache('thumbnails');
+      clearCache('thumbnails_v3');
       clearCache('thumbnails_featured_hp_v2');
       clearCache('thumbnails_decorations_hp');
+      clearCache('hero_floating_thumbnails');
       
       setTitle('');
       setDescription('');
@@ -988,17 +1016,17 @@ export const ThumbnailGallery = () => {
               <Sparkles className="text-amber-600" size={24} />
             </div>
             <div className="flex-grow text-center md:text-left">
-              <h4 className="font-bold text-lg">Connection Notice</h4>
+              <h4 className="font-bold text-lg">Connection Status: Demo Samples Active</h4>
               <p className="text-sm opacity-90">
-                The connection is slow or a limit has been reached. 
-                We've loaded our high-performance offline catalog for you so you can keep browsing!
+                The database connection is currently limited. We've loaded our offline high-res samples! 
+                If you are the admin, your live uploads are still safe in the database.
               </p>
             </div>
             <button 
-              onClick={() => setQuotaExceeded(false)}
-              className="px-4 py-2 bg-amber-200 hover:bg-amber-300 rounded-xl text-sm font-bold transition-colors"
+              onClick={() => fetchThumbnails(true, true)}
+              className="px-6 py-2 bg-amber-200 hover:bg-amber-300 rounded-xl text-sm font-bold transition-colors"
             >
-              Dismiss
+              Reconnect
             </button>
           </motion.div>
         )}
@@ -1089,13 +1117,30 @@ export const ThumbnailGallery = () => {
       </div>
 
       {loading && thumbnails.length === 0 ? (
-        <div className="flex flex-wrap justify-center gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {[...Array(PAGE_SIZE)].map((_, i) => (
             <ThumbnailSkeleton key={i} />
           ))}
         </div>
       ) : filteredThumbnails.length === 0 ? (
-        null
+        <div className="space-y-12 relative min-h-[400px] flex items-center justify-center">
+          <div className="text-center p-20 bg-zinc-50 border-2 border-dashed border-black/5 rounded-[3rem] w-full">
+            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+              <Search size={24} className="text-zinc-300" />
+            </div>
+            <h3 className="text-xl font-bold text-zinc-900 mb-2">No Projects Found</h3>
+            <p className="text-zinc-500 max-w-xs mx-auto text-sm">We couldn't find any projects matching your search or filter. Try a different category!</p>
+            <button 
+              onClick={() => {
+                setActiveFilter('All');
+                setSearchQuery('');
+              }}
+              className="mt-6 px-8 py-3 bg-white border border-black/5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-sm"
+            >
+              Show All Projects
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-12 relative">
           {loading && (
@@ -1104,39 +1149,18 @@ export const ThumbnailGallery = () => {
             </div>
           )}
           
-          <div 
-            ref={scrollContainerRef}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-            className="relative overflow-hidden cursor-none group/gallery py-10"
-          >
-            <motion.div 
-              ref={scrollContentRef}
-              style={{ x: smoothX }}
-              className="flex gap-12 px-12 items-center"
-            >
-              {filteredThumbnails.length === 0 && !loading && (
-                <div className="w-full text-center py-20 text-zinc-400 font-medium">
-                  No thumbnails found for this category.
-                </div>
-              )}
-              {filteredThumbnails.map((thumb, i) => (
-                <div key={thumb.id} className="min-w-[300px] md:min-w-[450px]">
-                  <ThumbnailItem 
-                    thumb={thumb}
-                    i={i}
-                    isAdmin={isAdmin}
-                    refiningId={refiningId}
-                    handleRefine={handleRefine}
-                    handleDelete={handleDelete}
-                  />
-                </div>
-              ))}
-            </motion.div>
-
-            {/* Scroll Indicators */}
-            <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-[#FAF9F6] to-transparent pointer-events-none z-10 opacity-0 group-hover/gallery:opacity-100 transition-opacity" />
-            <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#FAF9F6] to-transparent pointer-events-none z-10 opacity-0 group-hover/gallery:opacity-100 transition-opacity" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-12 py-10">
+            {filteredThumbnails.map((thumb, i) => (
+              <ThumbnailItem 
+                key={thumb.id}
+                thumb={thumb}
+                i={i}
+                isAdmin={isAdmin}
+                refiningId={refiningId}
+                handleRefine={handleRefine}
+                handleDelete={handleDelete}
+              />
+            ))}
           </div>
 
           {hasMore && (

@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { ZSpinner, ZSkeleton } from './ZLoading';
 import { useAdmin } from '../hooks/useAdmin';
 import { useFirestoreStatus } from '../hooks/useFirestoreStatus';
+import { BTSDetailModal } from './BTSDetailModal';
 import { db, auth, handleFirestoreError, OperationType, getDocsCached, clearCache, isQuotaExceededError } from '../firebase';
 import { 
   collection, 
@@ -288,6 +289,7 @@ export const BehindTheScenes = () => {
   const [selectedContent, setSelectedContent] = useState<BTSContent | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showComparison, setShowComparison] = useState(true);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -370,8 +372,7 @@ export const BehindTheScenes = () => {
         await addDoc(collection(db, 'behind_the_scenes'), data);
       }
 
-      clearCache('bts');
-      clearCache('behind');
+      clearCache('behind_the_scenes');
       await fetchBTS(true);
       toast.success('Detailed sample data seeded!', { id: toastId });
     } catch (err) {
@@ -388,8 +389,11 @@ export const BehindTheScenes = () => {
         orderBy('createdAt', 'desc'),
         limit(10)
       );
-      const data = await getDocsCached(q, 'bts_limit_10', force);
+      const data = await getDocsCached(q, 'behind_the_scenes_limit_10', force);
       setContents(data as BTSContent[]);
+      if (data.length > 0 && (data[0] as any).isFallback) {
+        setQuotaExceeded(true);
+      }
     } catch (err) {
       if (isQuotaExceededError(err)) {
         console.warn("BehindTheScenes: Quota exceeded, using fallback via getDocsCached");
@@ -639,8 +643,7 @@ export const BehindTheScenes = () => {
       setContents(prev => [newBTS, ...prev]);
       
       // Clear cache thoroughly
-      clearCache('bts');
-      clearCache('behind');
+      clearCache('behind_the_scenes');
       
       setTitle('');
       setVideoTitle('');
@@ -693,7 +696,7 @@ export const BehindTheScenes = () => {
           setContents(prev => prev.filter(c => c.id !== id));
           
           // Clear cache
-          clearCache('bts_limit_10');
+          clearCache('behind_the_scenes');
           
           toast.success('Case study deleted', { id: toastId });
         } catch (err) {
@@ -796,21 +799,24 @@ export const BehindTheScenes = () => {
       </div>
       {/* BTS Grid */}
       {/* Offline Warning */}
-      {!isConnected && (
+      {(quotaExceeded || !isConnected) && (
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-3 text-orange-700 max-w-5xl mx-auto"
+          className={`mb-8 p-4 border rounded-2xl flex items-center gap-3 max-w-5xl mx-auto ${quotaExceeded ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-orange-50 border-orange-100 text-orange-700'}`}
         >
           <AlertCircle size={20} />
           <div className="text-xs font-bold uppercase tracking-widest">
-            Database is currently offline. Showing cached data if available.
+            {quotaExceeded ? 'Firestore Quota Exceeded. Showing legacy High-Quality Portfolio pieces.' : 'Database is currently offline. Showing cached data if available.'}
           </div>
           <button 
-            onClick={() => window.location.reload()}
-            className="ml-auto px-4 py-2 bg-orange-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-orange-700 transition-all"
+            onClick={() => {
+              if (quotaExceeded) fetchBTS(true);
+              else window.location.reload();
+            }}
+            className={`ml-auto px-4 py-2 text-white rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${quotaExceeded ? 'bg-amber-600 hover:bg-amber-700' : 'bg-orange-600 hover:bg-orange-700'}`}
           >
-            Reconnect
+            {quotaExceeded ? 'Try Refresh' : 'Reconnect'}
           </button>
         </motion.div>
       )}
@@ -860,404 +866,11 @@ export const BehindTheScenes = () => {
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
       />
 
+      <BTSDetailModal content={selectedContent} onClose={() => setSelectedContent(null)} />
+
       <AnimatePresence>
-        {selectedContent && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedContent(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-xl"
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-5xl bg-white rounded-[3rem] overflow-hidden border border-black/5 shadow-2xl flex flex-col md:flex-row max-h-[90vh]"
-            >
-              <button
-                onClick={() => setSelectedContent(null)}
-                className="absolute top-6 right-6 z-20 p-2 bg-white/80 backdrop-blur-md rounded-full text-zinc-400 hover:text-black transition-colors shadow-sm"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              {/* Left Side: Visuals */}
-              <div className="w-full md:w-1/2 bg-zinc-50 overflow-y-auto custom-scrollbar p-8 md:p-12 space-y-8 relative">
-                <div className="absolute inset-0 noise-bg opacity-[0.02] pointer-events-none" />
-                <div className="space-y-6 relative z-10">
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => setShowComparison(false)}
-                        className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all ${!showComparison ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-zinc-400 hover:text-zinc-600'}`}
-                      >
-                        Gallery
-                      </button>
-                      {selectedContent.beforeImages && selectedContent.afterImages && (
-                        <button 
-                          onClick={() => setShowComparison(true)}
-                          className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all ${showComparison ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-zinc-400 hover:text-zinc-600'}`}
-                        >
-                          Comparison
-                        </button>
-                      )}
-                    </div>
-                    <span className="text-[10px] font-bold text-zinc-400">
-                      {showComparison ? 'Interactive Slider' : `${currentImageIndex + 1} / ${carouselImages.length}`}
-                    </span>
-                  </div>
-                  
-                  {showComparison && selectedContent.beforeImages && selectedContent.afterImages ? (
-                    <BeforeAfterSlider 
-                      before={selectedContent.beforeImages[0]} 
-                      after={selectedContent.afterImages[0]} 
-                    />
-                  ) : (
-                    <div className="relative group/carousel aspect-video rounded-[2rem] overflow-hidden shadow-2xl shadow-blue-600/10 border border-black/5 bg-black">
-                      <AnimatePresence mode="wait">
-                        <motion.img
-                          key={currentImageIndex}
-                          src={carouselImages[currentImageIndex]?.url}
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          transition={{ duration: 0.3 }}
-                          className="w-full h-full object-contain"
-                          alt={carouselImages[currentImageIndex]?.label}
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                        />
-                      </AnimatePresence>
-
-                      {carouselImages.length > 1 && (
-                        <>
-                          <button
-                            onClick={prevImage}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all opacity-0 group-hover/carousel:opacity-100"
-                          >
-                            <ChevronLeft className="w-6 h-6" />
-                          </button>
-                          <button
-                            onClick={nextImage}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all opacity-0 group-hover/carousel:opacity-100"
-                          >
-                            <ChevronRight className="w-6 h-6" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Carousel Thumbnails */}
-                  {!showComparison && carouselImages.length > 1 && (
-                    <div className="flex gap-3 justify-center">
-                      {carouselImages.map((img, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setCurrentImageIndex(idx)}
-                          className={`w-20 aspect-video rounded-xl overflow-hidden border-2 transition-all ${
-                            currentImageIndex === idx ? 'border-blue-600 scale-110' : 'border-transparent opacity-50 hover:opacity-100'
-                          }`}
-                        >
-                          <img src={img.url} className="w-full h-full object-cover" alt={img.label} referrerPolicy="no-referrer" loading="lazy" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Before/After Comparison Grid (Keep as secondary view) */}
-                {selectedContent.beforeImages && selectedContent.afterImages && (
-                  <div className="pt-12 border-t border-black/5">
-                    <div className="flex items-center justify-between mb-8">
-                      <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Side-by-Side Comparison</h4>
-                      <div className="flex gap-2">
-                        <div className="w-2 h-2 rounded-full bg-zinc-200" />
-                        <div className="w-2 h-2 rounded-full bg-blue-600" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-12">
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-4">
-                          <span className="px-4 py-2 bg-zinc-100 text-zinc-500 text-[9px] font-bold uppercase tracking-widest rounded-full border border-black/5">Before</span>
-                          <div className="flex-grow h-[1px] bg-zinc-100" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-6">
-                          {selectedContent.beforeImages.map((img, idx) => (
-                            <div key={idx} className="aspect-video rounded-[2.5rem] overflow-hidden border border-black/5 shadow-xl shadow-black/5 hover:scale-[1.02] transition-transform duration-500">
-                              <img src={img} className="w-full h-full object-cover" alt={`Before ${idx + 1}`} referrerPolicy="no-referrer" loading="lazy" />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-4">
-                          <span className="px-4 py-2 bg-blue-50 text-blue-600 text-[9px] font-bold uppercase tracking-widest rounded-full border border-blue-100">After</span>
-                          <div className="flex-grow h-[1px] bg-blue-50" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-6">
-                          {selectedContent.afterImages.map((img, idx) => (
-                            <div key={idx} className="aspect-video rounded-[2.5rem] overflow-hidden border border-blue-600/10 shadow-2xl shadow-blue-600/5 hover:scale-[1.02] transition-transform duration-500">
-                              <img src={img} className="w-full h-full object-cover" alt={`After ${idx + 1}`} referrerPolicy="no-referrer" loading="lazy" />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Right Side: Content */}
-              <div className="w-full md:w-1/2 overflow-y-auto custom-scrollbar p-8 md:p-12 bg-white flex flex-col">
-                <div className="max-w-xl flex-grow">
-                  <div className="space-y-4 mb-10">
-                    <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 bg-blue-600 text-white text-[9px] font-bold uppercase tracking-[0.2em] rounded-full shadow-lg shadow-blue-600/20">
-                        Case Study
-                      </span>
-                      <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">
-                        {selectedContent.createdAt ? (
-                          (() => {
-                            const rawDate = selectedContent.createdAt as any;
-                            const date = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
-                            return date.toLocaleDateString();
-                          })()
-                        ) : 'Recent Project'}
-                      </span>
-                    </div>
-                    <h2 className="text-5xl font-black text-[#1A1A1A] leading-[0.9] tracking-tighter uppercase">
-                      {selectedContent.title}
-                    </h2>
-                    {selectedContent.videoTitle && (
-                      <p className="text-blue-600 font-bold flex items-center gap-2 text-sm">
-                        <ExternalLink className="w-4 h-4" />
-                        {selectedContent.videoTitle}
-                      </p>
-                    )}
-                  </div>
-
-                  {selectedContent.description && (
-                    <div className="mb-12 relative">
-                      <div className="absolute -left-6 top-0 w-1 h-full bg-blue-600/10 rounded-full" />
-                      <p className="text-zinc-500 text-xl leading-relaxed font-medium italic">
-                        "{selectedContent.description}"
-                      </p>
-                    </div>
-                  )}
-
-                  {/* WhatsApp Chat Simulation */}
-                  {selectedContent.whatsappChat && (
-                    <div className="mb-12 space-y-4">
-                      <div className="flex items-center gap-3 text-green-600 mb-6">
-                        <MessageSquare className="w-5 h-5" />
-                        <h4 className="text-[10px] font-bold uppercase tracking-[0.2em]">Client Approval Chat</h4>
-                      </div>
-                      <div className="bg-[#E5DDD5] rounded-[2.5rem] overflow-hidden border border-black/5 shadow-xl relative">
-                        {/* WhatsApp Header */}
-                        <div className="bg-[#075E54] p-4 flex items-center justify-between text-white">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center overflow-hidden border border-white/10">
-                              <img 
-                                src={selectedContent.clientPhoto || "https://i.ibb.co/qXFY4XD/dposa-s.png"} 
-                                alt="Client" 
-                                className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
-                                loading="lazy"
-                              />
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold">{selectedContent.clientName || "Client"} (Verified)</div>
-                              <div className="text-[10px] opacity-70 flex items-center gap-1">
-                                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                                online
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 opacity-70">
-                            <Video size={18} />
-                            <Phone size={18} />
-                            <X className="w-5 h-5 cursor-pointer" onClick={() => setSelectedContent(null)} />
-                          </div>
-                        </div>
-                        {/* Chat Area */}
-                        <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar bg-[#e5ddd5] relative">
-                          <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat mix-blend-multiply" />
-                          
-                          {selectedContent.whatsappChat.map((msg, idx) => (
-                            <motion.div
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                              key={idx}
-                              className={`flex ${msg.role === 'client' ? 'justify-start' : 'justify-end'} relative z-10`}
-                            >
-                              <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm relative ${
-                                msg.role === 'client' 
-                                  ? 'bg-white text-zinc-800 rounded-tl-none' 
-                                  : 'bg-[#dcf8c6] text-zinc-800 rounded-tr-none'
-                              }`}>
-                                {/* Tail */}
-                                <div className={`absolute top-0 w-4 h-4 ${
-                                  msg.role === 'client' 
-                                    ? 'left-[-8px] bg-white [clip-path:polygon(100%_0,0_0,100%_100%)]' 
-                                    : 'right-[-8px] bg-[#dcf8c6] [clip-path:polygon(0_0,100%_0,0_100%)]'
-                                }`} />
-                                
-                                {msg.isVoice ? (
-                                  <div className="flex items-center gap-3 min-w-[220px] py-2">
-                                    <div className="relative">
-                                      <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-400 border border-black/5">
-                                        <Mic size={20} />
-                                      </div>
-                                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
-                                        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                                      </div>
-                                    </div>
-                                    <div className="flex-grow space-y-2">
-                                      <div className="flex items-end gap-0.5 h-6">
-                                        {[...Array(18)].map((_, i) => (
-                                          <motion.div 
-                                            key={i} 
-                                            animate={{ height: [4, Math.random() * 16 + 4, 4] }}
-                                            transition={{ repeat: Infinity, duration: 1 + Math.random(), delay: i * 0.05 }}
-                                            className={`w-0.5 rounded-full ${i < 6 ? 'bg-blue-500' : 'bg-zinc-300'}`} 
-                                          />
-                                        ))}
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                        <span className="text-[10px] font-bold text-zinc-400 tracking-tighter">{msg.duration || "0:15"}</span>
-                                        <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest">Voice Note</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm leading-relaxed pr-12">{msg.text}</p>
-                                )}
-                                <div className="absolute bottom-1 right-2 flex items-center gap-1">
-                                  <span className="text-[9px] text-zinc-400">{msg.time}</span>
-                                  {msg.role === 'designer' && <CheckCheck size={12} className="text-blue-500" />}
-                                </div>
-                              </div>
-                            </motion.div>
-                          ))}
-
-                          {/* Final Thumbnail Message */}
-                          <motion.div
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                            className="flex justify-end relative z-10"
-                          >
-                            <div className="max-w-[85%] p-2 bg-[#dcf8c6] rounded-2xl rounded-tr-none shadow-sm relative">
-                              <div className="absolute top-0 right-[-8px] bg-[#dcf8c6] w-4 h-4 [clip-path:polygon(0_0,100%_0,0_100%)]" />
-                              <div className="rounded-xl overflow-hidden border border-black/5 mb-1">
-                                <img 
-                                  src={selectedContent.imageUrl} 
-                                  alt="Final Thumbnail" 
-                                  className="w-full h-auto max-h-60 object-cover"
-                                  referrerPolicy="no-referrer"
-                                  loading="lazy"
-                                />
-                              </div>
-                              <div className="px-2 pb-1 flex items-center justify-between gap-4">
-                                <span className="text-[10px] font-medium text-zinc-500">Final_Thumbnail_v1.jpg</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[9px] text-zinc-400">
-                                    {selectedContent.whatsappChat[selectedContent.whatsappChat.length - 1]?.time || "Just now"}
-                                  </span>
-                                  <CheckCheck size={12} className="text-blue-500" />
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Client Feedback Card */}
-                  {selectedContent.clientFeedback && (
-                    <div className="mb-12 group">
-                      <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-blue-600/20 relative overflow-hidden">
-                        <Quote className="absolute -top-4 -right-4 w-24 h-24 text-white/10 rotate-12" />
-                        <div className="relative z-10">
-                          <div className="flex items-center gap-1 mb-4">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} size={14} className="fill-yellow-400 text-yellow-400" />
-                            ))}
-                          </div>
-                          <p className="text-lg font-bold leading-relaxed mb-6">
-                            "{selectedContent.clientFeedback}"
-                          </p>
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center overflow-hidden border border-white/10">
-                              {selectedContent.clientPhoto ? (
-                                <img src={selectedContent.clientPhoto} alt={selectedContent.clientName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              ) : (
-                                <CheckCircle2 className="w-5 h-5" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="text-xs font-bold uppercase tracking-widest">{selectedContent.clientName || "Verified Client"}</div>
-                              <div className="text-[10px] opacity-70">Project Success</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 gap-10">
-                    {selectedContent.layoutIdea && (
-                      <div className="space-y-4 group">
-                        <div className="flex items-center gap-3 text-blue-600">
-                          <Layout className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                          <h4 className="text-[10px] font-bold uppercase tracking-[0.2em]">The Vision</h4>
-                        </div>
-                        <div className="text-zinc-600 leading-relaxed bg-zinc-50 p-8 rounded-[2.5rem] border border-black/5 shadow-inner">
-                          {selectedContent.layoutIdea}
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedContent.designWorkflow && (
-                      <div className="space-y-4 group">
-                        <div className="flex items-center gap-3 text-blue-600">
-                          <Workflow className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                          <h4 className="text-[10px] font-bold uppercase tracking-[0.2em]">Process</h4>
-                        </div>
-                        <div className="text-zinc-600 leading-relaxed bg-blue-50/30 p-8 rounded-[2.5rem] border border-blue-600/5">
-                          {selectedContent.designWorkflow}
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedContent.caseStudy && (
-                      <div className="space-y-8 pt-10 border-t border-black/5">
-                        <div className="flex items-center gap-3 text-blue-600">
-                          <FileText className="w-5 h-5" />
-                          <h4 className="text-[10px] font-bold uppercase tracking-[0.2em]">Deep Dive</h4>
-                        </div>
-                        <div className="prose prose-zinc prose-sm max-w-none prose-headings:text-[#1A1A1A] prose-headings:font-black prose-headings:uppercase prose-headings:tracking-tight prose-p:text-zinc-600 prose-p:leading-relaxed prose-strong:text-blue-600 bg-white p-10 rounded-[3rem] border border-black/5 shadow-xl">
-                          <ReactMarkdown>{selectedContent.caseStudy}</ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-12 pt-8 border-t border-black/5 flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                  <span>Zefury Creative Studio</span>
-                  <span>© 2026</span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
         {showForm && (
+
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
             <motion.div
               initial={{ opacity: 0 }}

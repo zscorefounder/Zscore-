@@ -619,7 +619,7 @@ const HeroSection = () => {
                     )}
                     <div className="aspect-video bg-zinc-100">
                       <img 
-                        src={thumb.url} 
+                        src={thumb.imageUrl || thumb.image || thumb.url} 
                         alt="Hero Thumbnail" 
                         className="w-full h-full object-cover group-hover:scale-110 transition-all duration-1000"
                         loading="lazy"
@@ -1024,9 +1024,9 @@ const HangingSection = () => {
                       const toastId = toast.loading('Seeding sample posts...');
                       try {
                         const samples = [
-                          { title: "I Spent 100 Days in a Secret Bunker", desc: "A high-intensity gaming layout with custom typography.", image: "https://i.ibb.co/5Xd8rDDZ/image.png" },
-                          { title: "The Crypto Crash: Why Everything is Falling", desc: "Finance-focused design with clean data visualization.", image: "https://i.ibb.co/V0nZTDcZ/image.png" },
-                          { title: "AI is Replacing Designers (The Truth)", desc: "Futuristic tech aesthetic with neon accents.", image: "https://i.ibb.co/rKFrLL2S/image.png" }
+                          { title: "I Spent 100 Days in a Secret Bunker", description: "A high-intensity gaming layout with custom typography.", imageUrl: "https://picsum.photos/seed/bunker/800/450" },
+                          { title: "The Crypto Crash: Why Everything is Falling", description: "Finance-focused design with clean data visualization.", imageUrl: "https://picsum.photos/seed/crypto/800/450" },
+                          { title: "AI is Replacing Designers (The Truth)", description: "Futuristic tech aesthetic with neon accents.", imageUrl: "https://picsum.photos/seed/ai/800/450" }
                         ];
                         
                         for (const sample of samples) {
@@ -1185,7 +1185,7 @@ const HangingSection = () => {
                       )}
                       <div className="overflow-hidden bg-zinc-100 mb-3 aspect-video">
                         <img 
-                          src={card.image} 
+                          src={card.imageUrl || card.image} 
                           alt={card.title}
                           className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
                           loading="lazy"
@@ -1194,7 +1194,7 @@ const HangingSection = () => {
                       </div>
                       <div className="space-y-1">
                         <h3 className="font-bold text-zinc-900 text-xs truncate">{card.title}</h3>
-                        <HangingDescription text={card.desc} />
+                        <HangingDescription text={card.description || card.desc} />
                       </div>
                     </div>
                   </motion.div>
@@ -1241,28 +1241,7 @@ const WorkPage = () => {
         </div>
       </nav>
 
-      <HeroSection />
-      
-      {isAdmin && (
-        <div className="fixed bottom-8 right-8 z-[100] flex flex-col gap-3">
-          <button 
-            onClick={() => {
-              clearCache();
-              toast.success('Cache cleared. Reloading...');
-              setTimeout(() => window.location.reload(), 1000);
-            }}
-            className="flex items-center gap-2 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-2xl shadow-red-600/20 hover:bg-red-700 transition-all hover:scale-105 active:scale-95 group"
-            title="Clear all local cache and reload"
-          >
-            <RotateCw size={18} className="group-hover:rotate-180 transition-transform duration-700" />
-            Hard Reset Cache
-          </button>
-        </div>
-      )}
-
-      <HangingSection />
-
-      <main className="pb-20 px-6 max-w-6xl mx-auto relative z-10">
+      <main className="pt-32 pb-20 px-6 max-w-6xl mx-auto relative z-10">
         {/* Bento Header Section */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6">
           {/* About Card */}
