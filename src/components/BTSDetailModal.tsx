@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ExternalLink, MessageSquare, Video, Phone, Mic, CheckCheck, Star, Quote, Layout, Workflow, FileText, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { Timestamp } from 'firebase/firestore';
 
 interface BTSContent {
   id: string;
@@ -16,11 +15,12 @@ interface BTSContent {
   clientFeedback?: string;
   whatsappChat?: { role: 'client' | 'designer'; text: string; time: string; isVoice?: boolean; duration?: string }[];
   imageUrl: string;
+  beforeImageUrl?: string;
   clientName?: string;
   clientPhoto?: string;
   beforeImages?: string[];
   afterImages?: string[];
-  createdAt?: Timestamp | any;
+  createdAt?: any;
   isFallback?: boolean;
 }
 
@@ -39,7 +39,7 @@ const BeforeAfterSlider = ({ before, after }: { before: string, after: string })
   return (
     <div 
       ref={containerRef}
-      className="relative aspect-video rounded-[2.5rem] overflow-hidden cursor-ew-resize select-none border border-black/5 shadow-2xl"
+      className="relative aspect-video rounded-[2.5rem] overflow-hidden cursor-ew-resize select-none border border-black/5 shadow-2xl group/slider"
       onMouseMove={handleMove}
       onTouchMove={handleMove}
     >
@@ -52,24 +52,24 @@ const BeforeAfterSlider = ({ before, after }: { before: string, after: string })
       </div>
       
       <div 
-        className="absolute inset-y-0 w-1 bg-white shadow-[0_0_10px_rgba(0,0,0,0.3)] z-10"
+        className="absolute inset-y-0 w-1 bg-white/50 backdrop-blur-sm z-10 transition-colors group-hover/slider:bg-white"
         style={{ left: `${sliderPos}%` }}
       >
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-xl flex items-center justify-center">
-          <ChevronLeft size={14} className="text-zinc-400" />
-          <ChevronRight size={14} className="text-zinc-400" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-2xl flex items-center justify-center gap-1.5 border border-zinc-100">
+          <ChevronLeft size={16} className="text-blue-600" />
+          <ChevronRight size={16} className="text-blue-600" />
         </div>
       </div>
 
-      <div className="absolute bottom-6 left-6 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[8px] font-bold uppercase tracking-widest rounded-full">Before</div>
-      <div className="absolute bottom-6 right-6 px-3 py-1 bg-blue-600/80 backdrop-blur-md text-white text-[8px] font-bold uppercase tracking-widest rounded-full">After</div>
+      <div className="absolute top-6 left-6 px-4 py-2 bg-black/40 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-xl border border-white/10 opacity-0 group-hover/slider:opacity-100 transition-opacity">Before (RAW)</div>
+      <div className="absolute top-6 right-6 px-4 py-2 bg-blue-600/60 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-xl border border-white/10 opacity-0 group-hover/slider:opacity-100 transition-opacity">After (Mastered)</div>
     </div>
   );
 };
 
 export const BTSDetailModal = ({ content, onClose }: { content: BTSContent | null, onClose: () => void }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showComparison, setShowComparison] = useState(true);
+  const [showComparison, setShowComparison] = useState(content?.beforeImageUrl ? true : false);
 
   const getCarouselImages = (content: BTSContent) => {
     const images = [{ url: content.imageUrl, label: 'Final Result' }];
@@ -129,7 +129,7 @@ export const BTSDetailModal = ({ content, onClose }: { content: BTSContent | nul
                   >
                     Gallery
                   </button>
-                  {content.beforeImages && content.afterImages && (
+                  {(content.beforeImageUrl || (content.beforeImages && content.afterImages)) && (
                     <button 
                       onClick={() => setShowComparison(true)}
                       className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all ${showComparison ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-zinc-400 hover:text-zinc-600'}`}
@@ -143,10 +143,10 @@ export const BTSDetailModal = ({ content, onClose }: { content: BTSContent | nul
                 </span>
               </div>
               
-              {showComparison && content.beforeImages && content.afterImages ? (
+              {showComparison && (content.beforeImageUrl || (content.beforeImages && content.afterImages)) ? (
                 <BeforeAfterSlider 
-                  before={content.beforeImages[0]} 
-                  after={content.afterImages[0]} 
+                  before={content.beforeImageUrl || (content.beforeImages?.[0] as string)} 
+                  after={content.imageUrl || (content.afterImages?.[0] as string)} 
                 />
               ) : (
                 <div className="relative group/carousel aspect-video rounded-[2rem] overflow-hidden shadow-2xl shadow-blue-600/10 border border-black/5 bg-black">

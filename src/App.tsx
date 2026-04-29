@@ -59,20 +59,6 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import WorkPage from './pages/WorkPage';
 import AboutPage from './pages/AboutPage';
 import JourneyPage from './pages/JourneyPage';
-import { 
-  db, 
-  auth,
-  collection, 
-  query, 
-  orderBy, 
-  limit, 
-  getDocsCached,
-  handleFirestoreError,
-  OperationType,
-  isQuotaExceededError,
-  FALLBACK_DATA
-} from './firebase';
-import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { ThumbnailGallery, ThumbnailItem, Thumbnail } from './components/ThumbnailGallery';
 import { CommentsSection } from './components/CommentsSection';
 import { BTSDetailModal } from './components/BTSDetailModal';
@@ -113,13 +99,11 @@ const ScrapbookDecorations = ({ scrollY }: { scrollY: any }) => {
   useEffect(() => {
     const fetchStickers = async () => {
       try {
-        const q = query(
-          collection(db, 'thumbnails'),
-          orderBy('createdAt', 'desc'),
-          limit(3)
-        );
-        const data = await getDocsCached(q, 'thumbnails_decorations_hp');
-        setStickers(data);
+        const response = await fetch('/api/thumbnails');
+        if (!response.ok) throw new Error();
+        const all = await response.json();
+        // Just take the first 3 for decorations
+        setStickers(all.slice(0, 3));
       } catch (e) {
         // Silent fail for decorations
       }
@@ -230,7 +214,7 @@ const ProfileImage = () => {
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
           src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
           alt="Zeeshan" 
-          className="w-full h-auto grayscale hover:grayscale-0 transition-all duration-700 rounded-3xl"
+          className="w-full h-auto hover:grayscale-0 transition-all duration-700 rounded-3xl"
           referrerPolicy="no-referrer"
           loading="lazy"
         />
@@ -507,9 +491,9 @@ const AIChat = () => {
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center overflow-hidden border border-black/5">
                   <img 
-                    src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" 
+                    src="/regenerated_image_1777433995096.png" 
                     alt="Z Score Logo" 
-                    className="w-full h-full object-contain brightness-0" 
+                    className="w-full h-full object-contain" 
                     referrerPolicy="no-referrer" 
                     loading="lazy"
                   />
@@ -751,7 +735,7 @@ const PROJECTS: Project[] = [
   { id: 2, title: "The Crypto Crash: Why Everything is Falling", category: "Finance", image: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR" },
   { id: 3, title: "AI is Replacing Designers (The Truth)", category: "Tech", image: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR" },
   { id: 4, title: "Visual Storytelling Masterclass", category: "Portfolio", image: "https://i.ibb.co/qXFY4XD/dposa-s.png", stats: "Elite Design" },
-  { id: 5, title: "Modern Brand Identity", category: "Business", image: "https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png", stats: "Top Tier" },
+  { id: 5, title: "Modern Brand Identity", category: "Business", image: "/regenerated_image_1777433995096.png", stats: "Top Tier" },
   { id: 6, title: "Travel Hook: Alpine Adventure", category: "Travel", image: "https://i.ibb.co/rR6LmpRm/image.png", stats: "15% Growth" },
 ];
 
@@ -837,6 +821,21 @@ const PRICING: PricingPlan[] = [
 ];
 
 // --- Components ---
+
+interface TrustedClient {
+  name: string;
+  logo: string;
+  link: string;
+}
+
+const TRUSTED_CLIENTS: TrustedClient[] = [
+  { name: "Hustle Ninjas", logo: "https://i.ibb.co/NdXYBpM4/image.png", link: "https://youtube.com/@HustleNinjas" },
+  { name: "Enablers", logo: "https://image2url.com/r2/default/images/1774670864556-c1f9664f-9c57-4938-9b23-2eaa0371cdf4.png", link: "https://youtube.com/@Enablers" },
+  { name: "Azul Welz", logo: "https://i.ibb.co/ddJ5FDm/image.png", link: "https://youtube.com/@azulwelz" },
+  { name: "Rob Lipsett", logo: "https://i.ibb.co/6J4CbdQf/image.png", link: "https://youtube.com/@roblipsett" },
+  { name: "Kristen & Siya", logo: "https://i.ibb.co/rR6LmpRm/image.png", link: "https://youtube.com/@kristensiya" },
+  { name: "Saqib Azhar", logo: "https://image2url.com/r2/default/images/1774670864556-c1f9664f-9c57-4938-9b23-2eaa0371cdf4.png", link: "https://youtube.com/@SaqibAzhar" },
+];
 
 const Counter = ({ target, duration = 2, suffix = "" }: { target: number; duration?: number; suffix?: string }) => {
   const [count, setCount] = useState(0);
@@ -1009,29 +1008,26 @@ const CustomCursor = () => {
 
 const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
   const location = useLocation();
   const isHome = location.pathname === '/';
-  const { isAdmin, user } = useAdmin();
+  const { isAdmin, user, login, logout } = useAdmin();
 
-  const handleLogin = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      toast.success("Logged in successfully!");
-    } catch (error) {
-      console.error("Login Error:", error);
-      toast.error("Failed to login. Please try again.");
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (login(loginEmail)) {
+      toast.success("Logged in as Admin!");
+      setShowLoginModal(false);
+      setLoginEmail('');
+    } else {
+      toast.error("Invalid Admin Email.");
     }
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      toast.success("Logged out successfully!");
-    } catch (error) {
-      console.error("Logout Error:", error);
-      toast.error("Failed to logout.");
-    }
+    logout();
+    toast.success("Logged out successfully!");
   };
 
   const navItems: { id: SectionId; label: string; path?: string }[] = [
@@ -1061,7 +1057,7 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
   return (
     <nav className="fixed top-0 left-0 w-full z-50 px-6 py-6 flex justify-between items-center bg-white/80 backdrop-blur-xl border-b border-black/5">
       <Link to="/" className="flex items-center gap-2 cursor-pointer group">
-        <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-8 w-auto group-hover:scale-110 transition-transform duration-300 brightness-0" referrerPolicy="no-referrer" loading="lazy" />
+        <img src="/regenerated_image_1777433995096.png" alt="Z Score Logo" className="h-8 w-auto group-hover:scale-110 transition-transform duration-300" referrerPolicy="no-referrer" loading="lazy" />
       </Link>
       
       {/* Desktop Nav */}
@@ -1116,11 +1112,11 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
 
       <div className="flex items-center gap-4">
         {/* Admin Controls */}
-        <div className="hidden sm:flex items-center gap-3 mr-2 border-r border-black/5 pr-4">
+        <div className="flex items-center gap-3 md:mr-2 md:border-r border-black/5 md:pr-4">
           {user ? (
             <div className="flex items-center gap-3">
               {isAdmin && (
-                <span className="px-2 py-1 bg-blue-600 text-white text-[8px] font-bold uppercase tracking-widest rounded-md">Admin</span>
+                <span className="hidden sm:inline-block px-2 py-1 bg-blue-600 text-white text-[8px] font-bold uppercase tracking-widest rounded-md">Admin</span>
               )}
               <button 
                 onClick={handleLogout}
@@ -1132,7 +1128,7 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
             </div>
           ) : (
             <button 
-              onClick={handleLogin}
+              onClick={() => setShowLoginModal(true)}
               className="p-2 text-zinc-400 hover:text-blue-600 transition-colors"
               title="Admin Login"
             >
@@ -1159,6 +1155,63 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
           {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       </div>
+
+      {/* Login Modal */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLoginModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-blue-600" />
+              <button 
+                onClick={() => setShowLoginModal(false)}
+                className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <LogIn size={32} />
+                </div>
+                <h3 className="text-2xl font-black text-zinc-900 tracking-tight uppercase">Admin Access</h3>
+                <p className="text-zinc-500 text-sm mt-2">Enter your authorized email to continue.</p>
+              </div>
+
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-4 mb-2 block">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    autoFocus
+                    className="w-full bg-zinc-50 border border-black/5 p-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/10 font-bold text-sm transition-all"
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold text-xs uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-blue-600/10"
+                >
+                  Verify Access
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Mobile Nav Overlay */}
       <AnimatePresence>
@@ -1222,10 +1275,105 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
               <Phone size={18} />
               Start a Project
             </a>
+
+            <div className="pt-4 border-t border-black/5">
+              {user ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Logged in as {user.name}</span>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      handleLogout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full py-4 bg-zinc-100 text-red-600 rounded-2xl font-bold text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-2"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setShowLoginModal(true);
+                    setIsMenuOpen(false);
+                  }}
+                  className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-xl shadow-black/10"
+                >
+                  Admin Login
+                </button>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
     </nav>
+  );
+};
+
+// --- Testimonial Carousel for Case Study Card ---
+const CardTestimonialCarousel = () => {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % REVIEWS.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const testimonial = REVIEWS[index];
+
+  return (
+    <div className="mt-6 pt-6 border-t border-black/5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h5 className="text-[9px] font-black uppercase tracking-[0.3em] text-blue-600 flex items-center gap-2">
+          <Star size={10} className="fill-blue-600" />
+          Client Impact
+        </h5>
+        <div className="flex gap-1">
+          {REVIEWS.map((_, i) => (
+            <div 
+              key={i} 
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${i === index ? 'w-3 bg-blue-600' : 'bg-zinc-200'}`} 
+            />
+          ))}
+        </div>
+      </div>
+      
+      <div className="relative h-20 overflow-hidden">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="absolute inset-0 flex flex-col justify-between"
+          >
+            <p className="text-[10px] text-zinc-500 italic leading-relaxed line-clamp-2">
+              "{testimonial.text}"
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-black/5 flex-shrink-0">
+                <img 
+                  src={testimonial.image} 
+                  alt={testimonial.name} 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer" 
+                  loading="lazy" 
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold text-[#1A1A1A] truncate">{testimonial.name}</div>
+                <div className="text-[8px] text-zinc-400 font-bold uppercase tracking-widest">{testimonial.handle}</div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
   );
 };
 
@@ -1238,9 +1386,11 @@ const FeaturedCaseStudies = () => {
   useEffect(() => {
     const fetchStudies = async () => {
       try {
-        const q = query(collection(db, 'behind_the_scenes'), orderBy('createdAt', 'desc'), limit(3));
-        const data = await getDocsCached(q, 'behind_the_scenes_featured_hp', true);
-        setStudies(data);
+        const resp = await fetch('/api/bts');
+        if (resp.ok) {
+          const data = await resp.json();
+          setStudies(data.slice(0, 3));
+        }
       } catch (err) {
         console.error("Failed to fetch featured studies:", err);
       } finally {
@@ -1317,6 +1467,7 @@ const FeaturedCaseStudies = () => {
                     <ArrowRight size={10} />
                   </div>
                 </div>
+                {i === 0 && <CardTestimonialCarousel />}
               </div>
             </motion.div>
           ))}
@@ -1334,17 +1485,11 @@ const FeaturedWork = () => {
   useEffect(() => {
     const fetchFeatured = async () => {
       try {
-        console.log("FeaturedWork: Starting fetch...");
-        const q = query(
-          collection(db, 'thumbnails'),
-          orderBy('createdAt', 'desc'),
-          limit(48)
-        );
-        const data = await getDocsCached(q, 'thumbnails_featured_hp_v2', true);
+        console.log("FeaturedWork: Starting fetch from local API...");
+        const response = await fetch('/api/thumbnails');
+        if (!response.ok) throw new Error('Failed to fetch thumbnails');
+        const data = await response.json();
         console.log(`FeaturedWork: Received ${data.length} thumbnails`);
-        
-        // If the first item is a fallback, we keep showing demo mode if we want,
-        // but typically HP just shows what it gets.
         setThumbnails(data);
       } catch (err) {
         console.error("FeaturedWork Error:", err);
@@ -1407,79 +1552,94 @@ const FeaturedWork = () => {
   );
 };
 
+const FishBackground = () => {
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const fishRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePos({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Use smoother spring movement for the fish
+  const springConfig = { damping: 25, stiffness: 120 };
+  const mouseX = useSpring(mousePos.x, springConfig);
+  const mouseY = useSpring(mousePos.y, springConfig);
+
+  // Rotation based on movement direction
+  const [rotation, setRotation] = useState(0);
+  const prevPos = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const dx = mousePos.x - prevPos.current.x;
+    const dy = mousePos.y - prevPos.current.y;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      setRotation(angle + 90); // Adjusting base rotation
+    }
+    prevPos.current = mousePos;
+  }, [mousePos]);
+
+  const x = useTransform(mouseX, (v) => v - 75);
+  const y = useTransform(mouseY, (v) => v - 75);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      <motion.div
+        style={{
+          x,
+          y,
+          rotate: rotation,
+        }}
+        className="absolute w-40 h-40 opacity-30 select-none"
+      >
+        <div className="relative w-full h-full">
+          {/* Main Fish Body */}
+          <motion.img 
+            src="https://i.ibb.co/68v8sXf/koi-3d.png" 
+            alt="3D Fish"
+            className="w-full h-full object-contain filter blur-[1px] contrast-125 saturate-150"
+            animate={{
+              scale: [1, 1.05, 1],
+              rotateY: [0, 10, 0],
+            }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            onError={(e) => {
+              // Fallback if image fails to load
+              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1524160223099-31c30800b462?auto=format&fit=crop&q=80&w=200";
+            }}
+            referrerPolicy="no-referrer"
+          />
+          {/* Shadow/Depth Effect */}
+          <div className="absolute inset-0 bg-blue-500/10 blur-[40px] -z-10 rounded-full" />
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const Hero = () => {
   const { scrollY } = useScroll();
-  const [thumbnails, setThumbnails] = useState<any[]>([]);
   const yBg = useTransform(scrollY, [0, 1000], [0, -150]);
   const yFloating1 = useTransform(scrollY, [0, 1000], [0, -50]);
   const yFloating2 = useTransform(scrollY, [0, 1000], [0, 50]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
   
-  useEffect(() => {
-    const fetchHeroData = async () => {
-      try {
-        // Use the generic thumbnails but limit to 10 for the hero
-        const q = query(
-          collection(db, 'thumbnails'), 
-          orderBy('createdAt', 'desc'),
-          limit(15)
-        );
-        const data = await getDocsCached(q, 'hero_floating_thumbnails');
-        setThumbnails(data);
-      } catch (err) {
-        console.warn("Hero fetch failed, using fallback:", err);
-      }
-    };
-    fetchHeroData();
-  }, []);
-
   return (
     <section id="home" className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 overflow-hidden [perspective:1000px]">
+      <FishBackground />
       {/* Background Noise/Grain Overlay */}
       <motion.div 
         style={{ y: yBg }}
         className="absolute inset-0 opacity-[0.03] pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/p6.png')]" 
       />
-
-      {/* Floating Thumbnails as 3D Elements */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {thumbnails.map((thumb, i) => (
-          <motion.div
-            key={thumb.id || i}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ 
-              opacity: [0.1, 0.4, 0.1],
-              scale: [1, 1.1, 1],
-              y: [0, -20, 0],
-              rotate: [i % 2 === 0 ? -5 : 5, i % 2 === 0 ? 5 : -5, i % 2 === 0 ? -5 : 5]
-            }}
-            transition={{ 
-              duration: 10 + i * 2, 
-              repeat: Infinity, 
-              ease: "easeInOut" 
-            }}
-            style={{
-              position: 'absolute',
-              top: `${15 + (i * 15) % 70}%`,
-              left: `${10 + (i * 25) % 80}%`,
-              width: '240px',
-              zIndex: 0,
-              filter: 'blur(2px)',
-              pointerEvents: 'none'
-            }}
-            className="hidden lg:block opacity-20 grayscale brightness-50"
-          >
-            <div className="aspect-video bg-zinc-800 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-              <img 
-                src={thumb.imageUrl || thumb.image || (FALLBACK_DATA['thumbnails'][0] as any).imageUrl} 
-                className="w-full h-full object-cover opacity-50" 
-                alt="" 
-                referrerPolicy="no-referrer"
-              />
-            </div>
-          </motion.div>
-        ))}
-      </div>
 
       <motion.div 
         style={{ opacity }}
@@ -2161,7 +2321,10 @@ const Reviews = () => (
           />
         </svg>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-0 relative">
+        <div 
+          className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-0 relative"
+          style={{ perspective: "2000px" }}
+        >
           {REVIEWS.map((review, i) => {
             const rotations = [-3, 2, -2, 3];
             const offsets = [
@@ -2175,24 +2338,25 @@ const Reviews = () => (
             return (
               <motion.div
                 key={review.id}
-                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                initial={{ opacity: 0, rotateY: -110, x: -50, scale: 0.9 }}
                 whileInView={{ 
                   opacity: 1, 
-                  y: 0,
+                  rotateY: rotations[i % rotations.length],
+                  x: 0,
                   scale: 1,
                   rotate: rotations[i % rotations.length]
                 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ 
                   delay: i * 0.1, 
-                  duration: 0.6,
-                  type: "spring",
-                  stiffness: 120,
-                  damping: 12
+                  duration: 0.8,
+                  ease: [0.16, 1, 0.3, 1]
                 }}
+                style={{ transformOrigin: "left center", transformStyle: "preserve-3d" }}
                 whileHover={{ 
                   scale: 1.05, 
                   rotate: 0,
+                  rotateY: 0,
                   y: -10,
                   zIndex: 50,
                   transition: { duration: 0.2 }
@@ -2279,85 +2443,57 @@ const Reviews = () => (
   </section>
 );
 
-const TrustedClients = () => (
-  <section className="py-32 bg-[#F5F5F5] relative overflow-hidden">
-    {/* Background Grid */}
-    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
-      style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '30px 30px' }} 
-    />
-
-    <div className="max-w-7xl mx-auto px-6 relative z-10">
-      <div className="text-center mb-24 space-y-4">
-        <h3 className="text-blue-600 font-mono text-xs uppercase tracking-[0.3em]">Premium Network</h3>
-        <h2 className="text-5xl md:text-7xl font-display font-bold text-[#1A1A1A] tracking-tighter">
-          TRUSTED BY <br /><span className="text-blue-600 underline decoration-blue-600/20 underline-offset-8">CREATORS.</span>
-        </h2>
+const TrustedClients = () => {
+  return (
+    <section className="py-20 bg-white border-t border-black/5 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6 mb-12">
+        <div className="flex items-center gap-4">
+          <div className="h-px flex-1 bg-black/5" />
+          <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Trusted By World's Top Creators</h3>
+          <div className="h-px flex-1 bg-black/5" />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-12 md:gap-8 relative">
-        {CLIENTS.map((client, i) => {
-          const rotations = [-2, 3, -3, 2, -1];
-          const pinColors = ["#3B82F6", "#FF6321", "#8B5CF6", "#10B981", "#F59E0B"];
-          
-          return (
-            <motion.div 
-              key={client.id} 
-              initial={{ opacity: 0, scale: 0.7, y: 30 }}
-              whileInView={{ 
-                opacity: 1, 
-                scale: 1, 
-                rotate: rotations[i % rotations.length],
-                y: [0, -10, 0]
-              }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ 
-                delay: i * 0.1, 
-                duration: 0.8,
-                type: "spring",
-                stiffness: 120,
-                y: {
-                  repeat: Infinity,
-                  duration: 3 + i * 0.5,
-                  ease: "easeInOut",
-                  delay: i * 0.3
-                }
-              }}
-              whileHover={{ 
-                scale: 1.15, 
-                rotate: 0, 
-                zIndex: 20,
-                y: -15,
-                transition: { duration: 0.2 }
-              }}
-              className="relative p-6 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.05)] rounded-xl flex flex-col items-center text-center group transition-all duration-500 cursor-default"
+      <div className="relative flex overflow-hidden">
+        <motion.div 
+          animate={{ x: ["0%", "-50%"] }}
+          transition={{ 
+            duration: 35, 
+            repeat: Infinity, 
+            ease: "linear" 
+          }}
+          className="flex whitespace-nowrap gap-12 md:gap-24 px-12"
+        >
+          {[...TRUSTED_CLIENTS, ...TRUSTED_CLIENTS].map((client, i) => (
+            <a 
+              key={i}
+              href={client.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-4 group cursor-pointer"
             >
-              <PushPin color={pinColors[i % pinColors.length]} />
-              
-              <div className="w-20 h-20 bg-zinc-50 rounded-full overflow-hidden mb-6 border-4 border-white shadow-inner group-hover:scale-110 transition-transform duration-500 ring-0 group-hover:ring-4 ring-blue-50">
+              <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl overflow-hidden grayscale group-hover:grayscale-0 transition-all duration-500 border border-black/5 shadow-sm group-hover:shadow-2xl group-hover:shadow-blue-500/10 group-hover:scale-110">
                 <img 
-                  src={client.image} 
+                  src={client.logo} 
                   alt={client.name} 
-                  className="w-full h-full object-cover" 
-                  referrerPolicy="no-referrer" 
-                  loading="lazy"
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
                 />
               </div>
-              
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-tight group-hover:text-blue-600 transition-colors">{client.name}</h4>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{client.handle}</p>
-              </div>
+              <span className="text-xl md:text-3xl font-display font-black text-zinc-300 group-hover:text-black transition-colors uppercase tracking-tighter">
+                {client.name}
+              </span>
+            </a>
+          ))}
+        </motion.div>
 
-              {/* Decorative tape effect */}
-              <div className="absolute -bottom-2 -right-2 w-12 h-4 bg-blue-600/10 rotate-12 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute -top-2 -left-2 w-8 h-8 bg-blue-600/5 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500" />
-            </motion.div>
-          );
-        })}
+        {/* Gradient Overlays */}
+        <div className="absolute inset-y-0 left-0 w-32 bg-linear-to-r from-white to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-y-0 right-0 w-32 bg-linear-to-l from-white to-transparent z-10 pointer-events-none" />
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const Pricing = () => (
   <section id="pricing" className="section-padding bg-black/[0.02] border-y border-black/5 overflow-hidden">
@@ -2617,7 +2753,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
+                <img src="/regenerated_image_1777433995096.png" alt="Logo" className="w-16 h-auto" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Instagram size={16} className="text-purple-600" />
@@ -2665,7 +2801,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Logo" className="w-16 h-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
+                <img src="/regenerated_image_1777433995096.png" alt="Logo" className="w-16 h-auto" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Video size={16} className="text-black" />
@@ -2806,7 +2942,7 @@ const Footer = () => (
   <footer className="py-12 px-6 border-t border-black/5">
     <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
       <div className="flex items-center gap-2">
-        <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-8 w-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
+        <img src="/regenerated_image_1777433995096.png" alt="Z Score Logo" className="h-8 w-auto" referrerPolicy="no-referrer" loading="lazy" />
       </div>
       
       <p className="text-zinc-500 text-xs uppercase tracking-widest">
@@ -2866,9 +3002,9 @@ const LoadingScreen = ({ progress }: { progress: number }) => {
             }}
           >
             <img 
-              src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" 
+              src="/regenerated_image_1777433995096.png" 
               alt="Z Score Logo" 
-              className="h-20 w-auto brightness-0" 
+              className="h-20 w-auto" 
               referrerPolicy="no-referrer" 
               loading="lazy"
             />

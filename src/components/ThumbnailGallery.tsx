@@ -20,28 +20,9 @@ import {
 } from 'lucide-react';
 import { PushPin } from './PushPin';
 import { ZSpinner, ZSkeleton } from './ZLoading';
-import { 
-  db, 
-  auth, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  serverTimestamp, 
-  handleFirestoreError, 
-  OperationType,
-  getDocsCached,
-  clearCache,
-  clearAllCache,
-  where,
-  isQuotaExceededError
-} from '../firebase';
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
-import { deleteDoc, doc, updateDoc, limit, startAfter, getDocs, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
 import { GoogleGenAI, Type } from "@google/genai";
 import { ConfirmModal } from './ConfirmModal';
 import { useAdmin } from '../hooks/useAdmin';
-import { useFirestoreStatus } from '../hooks/useFirestoreStatus';
 import { toast } from 'sonner';
 
 export interface Thumbnail {
@@ -51,55 +32,32 @@ export interface Thumbnail {
   imageUrl: string;
   category?: string;
   stats?: string;
-  createdAt: any;
-  isFallback?: boolean;
+  createdAt: string;
+  variantImageUrl?: string;
+  variantStats?: string;
+  abTestActive?: boolean;
 }
 
-const CATEGORIES = ['All', 'Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'];
-const PAGE_SIZE = 48; // Increased from 12 to show more thumbnails, well within 5MB LocalStorage limit
-
-const ThumbnailSkeleton = () => (
-  <div className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full md:w-[calc(50%-2rem)] lg:w-[calc(50%-2.5rem)] max-w-lg mx-auto border border-black/[0.02] space-y-6">
-    <div className="absolute top-6 left-1/2 -translate-x-1/2">
-      <ZSkeleton className="w-4 h-4 rounded-full" />
-    </div>
-    <div className="flex items-center justify-between">
-      <ZSkeleton className="h-8 w-12 rounded-lg" />
-      <div className="flex gap-1">
-        {[...Array(5)].map((_, i) => (
-          <ZSkeleton key={i} className="w-3 h-3 rounded-full" />
-        ))}
-      </div>
-    </div>
-    <ZSkeleton className="aspect-video rounded-2xl" />
-    <div className="space-y-4">
-      <ZSkeleton className="h-8 w-3/4 rounded-lg" />
-      <div className="flex items-center justify-between pt-2">
-        <ZSkeleton className="h-4 w-1/4 rounded-full" />
-        <ZSkeleton className="h-5 w-1/6 rounded-full" />
-      </div>
-    </div>
-  </div>
-);
-
-const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 450, quality = 0.5): Promise<string> => {
+const compressImage = async (base64: string): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
-    img.src = base64Str;
+    img.src = base64;
     img.onload = () => {
       const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 1280;
+      const MAX_HEIGHT = 720;
       let width = img.width;
       let height = img.height;
 
       if (width > height) {
-        if (width > maxWidth) {
-          height *= maxWidth / width;
-          width = maxWidth;
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
         }
       } else {
-        if (height > maxHeight) {
-          width *= maxHeight / height;
-          height = maxHeight;
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
         }
       }
 
@@ -107,17 +65,7 @@ const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 450, quali
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
-      
-      // Try to get a size under 80KB for faster loading and to avoid localStorage limits
-      let currentQuality = quality;
-      let result = canvas.toDataURL('image/jpeg', currentQuality);
-      
-      while (result.length > 80000 && currentQuality > 0.1) {
-        currentQuality -= 0.05;
-        result = canvas.toDataURL('image/jpeg', currentQuality);
-      }
-      
-      resolve(result);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
     };
   });
 };
@@ -133,11 +81,11 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [showVariant, setShowVariant] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const pinColors = ["#FF6321", "#3B82F6", "#8B5CF6", "#10B981"];
 
-  console.log(`Rendering ThumbnailItem: ${thumb.title}, isLoaded: ${isLoaded}`);
+  const hasVariant = !!thumb.variantImageUrl;
 
   useEffect(() => {
     if (imgRef.current?.complete) {
@@ -159,43 +107,25 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ 
         opacity: 1, 
-        scale: 1, 
-        rotate: [-1, 1, -0.5, 0.5][i % 4],
         y: 0
       }}
       whileHover={{ 
-        scale: 1.02, 
-        rotate: 0, 
-        zIndex: 30,
-        y: -5,
-        transition: { duration: 0.2 }
+        y: -10,
+        transition: { duration: 0.3, ease: "easeOut" }
       }}
-      transition={{ delay: (i % 6) * 0.05, duration: 0.4, ease: "easeOut" }}
-      className="relative p-10 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.08)] rounded-xl w-full max-w-lg mx-auto group hover:z-30 transition-all cursor-default"
+      transition={{ 
+        delay: (i % 6) * 0.05, 
+        duration: 0.6, 
+        ease: "easeOut"
+      }}
+      className="relative p-4 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.04)] hover:shadow-[0_40px_80px_rgba(0,102,255,0.1)] rounded-[2.5rem] w-full mx-auto group transition-all duration-500 cursor-default border border-zinc-100 hover:border-blue-500/30"
     >
-      <PushPin color={pinColors[i % pinColors.length]} />
-      
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <motion.span 
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ delay: i * 0.1 + 0.5 }}
-            className="font-mono text-2xl font-bold text-zinc-100 group-hover:text-zinc-200 transition-colors"
-          >
-            {String(i + 1).padStart(2, '0')}
-          </motion.span>
-          <div className="flex items-center gap-1">
-            {[...Array(5)].map((_, starI) => (
-              <Star key={starI} size={10} className="fill-orange-500 text-orange-500" />
-            ))}
-          </div>
-        </div>
-
-        <div className="aspect-video overflow-hidden relative bg-zinc-900 rounded-2xl border border-white/5 group-hover:border-blue-500/30 transition-all duration-500 shadow-2xl">
+      <div className="space-y-4">
+        {/* Clean Thumbnail Container */}
+        <div className="aspect-video overflow-hidden relative bg-zinc-900 rounded-[1.8rem] border border-black/5 transition-all duration-500 shadow-sm">
           {!isLoaded && !hasError && (
             <div className="absolute inset-0 bg-zinc-800 animate-pulse flex items-center justify-center">
               <ImageIcon className="text-zinc-700" size={32} />
@@ -207,103 +137,130 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
               <p className="text-[8px] font-bold uppercase tracking-widest text-zinc-600">Image failed to load</p>
             </div>
           )}
+          
+          <AnimatePresence mode="wait">
             <motion.img 
               ref={imgRef}
-              key={thumb.id || thumb.imageUrl}
-              src={thumb.imageUrl} 
+              key={showVariant ? (thumb.variantImageUrl || thumb.id) : (thumb.id || thumb.imageUrl)}
+              src={showVariant ? thumb.variantImageUrl : thumb.imageUrl} 
               alt={thumb.title} 
               initial={{ opacity: 0 }}
               animate={{ opacity: isLoaded ? 1 : 0 }}
-              transition={{ duration: 0.3 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
               onLoad={() => setIsLoaded(true)}
               onError={() => {
-                console.error(`Image load error for: ${thumb.imageUrl}`);
                 setHasError(true);
                 setIsLoaded(true);
               }}
               className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105"
               referrerPolicy="no-referrer"
-              loading={i < 8 ? "eager" : "lazy"}
+              loading={i < 4 ? "eager" : "lazy"}
             />
-          
-          {/* Status Badge */}
-          <div className="absolute bottom-4 right-4 z-40">
-            {thumb.isFallback ? (
-              <span className="px-2 py-1 bg-amber-500/20 backdrop-blur-md text-amber-500 text-[8px] font-black uppercase tracking-widest rounded border border-amber-500/30">
-                Demo Sample
+          </AnimatePresence>
+        </div>
+
+        {/* Content & Metadata Below Image */}
+        <div className="space-y-4 px-2 pb-2">
+          {/* Top Metadata Row */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2 py-1 bg-blue-50 text-blue-600 text-[8px] font-black tracking-widest rounded-md uppercase border border-blue-100">
+                {thumb.category || 'Portfolio'}
               </span>
-            ) : (
-              <span className="px-2 py-1 bg-green-500/20 backdrop-blur-md text-green-500 text-[8px] font-black uppercase tracking-widest rounded border border-green-500/30 flex items-center gap-1">
+              {thumb.stats && (
+                <span className="px-2 py-1 bg-zinc-50 text-zinc-600 text-[8px] font-black tracking-widest rounded-md uppercase border border-zinc-100">
+                  {thumb.stats}
+                </span>
+              )}
+              <span className="px-2 py-1 bg-green-50 text-green-600 text-[8px] font-black tracking-widest rounded-md uppercase border border-green-100 flex items-center gap-1">
                 <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
-                Live Portfolio
+                Live
               </span>
+            </div>
+
+            {/* Quick Actions (Admin or General) */}
+            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <button 
+                onClick={handleCopy}
+                className="p-2 bg-zinc-100 text-zinc-500 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
+                title="Copy Link"
+              >
+                {isCopied ? <Check size={12} strokeWidth={3} /> : <Copy size={12} strokeWidth={3} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Title & Description */}
+          <div className="space-y-1">
+            <h4 className="text-xl font-black text-zinc-900 group-hover:text-blue-600 transition-colors tracking-tight uppercase">
+              {thumb.title}
+            </h4>
+            {thumb.description && (
+              <p className="text-xs text-zinc-500 leading-relaxed font-medium line-clamp-2">
+                {thumb.description}
+              </p>
             )}
           </div>
-          
-          {/* Subtle Overlay */}
-          <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-          <div className="absolute top-4 right-4 flex gap-2 opacity-0 translate-y-[-10px] group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 z-30">
-            <button 
-              onClick={handleCopy}
-              className="p-2.5 bg-black/40 backdrop-blur-md border border-white/10 text-white rounded-xl hover:bg-white hover:text-black transition-all"
-              title="Copy Image Link"
-            >
-              {isCopied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
-            </button>
-            {isAdmin && (
-              <>
+          {/* Admin Controls Area */}
+          {isAdmin && (
+            <div className="pt-4 border-t border-zinc-100 flex items-center justify-between gap-3">
+              <div className="flex gap-2">
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
                     handleRefine(thumb.id, thumb.imageUrl);
                   }}
                   disabled={refiningId === thumb.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 border border-blue-400/30 text-white rounded-xl hover:bg-blue-700 transition-all shadow-xl disabled:opacity-50 group/refine"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/10 disabled:opacity-50 group/refine"
                 >
-                  {refiningId === thumb.id ? <ZSpinner size={14} /> : <Sparkles size={14} className="group-hover/refine:rotate-12 transition-transform" />}
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Refine</span>
+                  {refiningId === thumb.id ? <ZSpinner size={12} /> : <Sparkles size={12} />}
+                  <span className="text-[10px] font-bold uppercase tracking-widest">AI Refine</span>
                 </button>
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDelete(thumb.id);
                   }}
-                  className="p-2.5 bg-black/40 backdrop-blur-md border border-white/10 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-lg"
-                  title="Delete Thumbnail"
+                  className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                  title="Delete"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={14} />
                 </button>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
 
-        <div className="space-y-3 px-1">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 bg-blue-600/10 text-blue-600 text-[8px] font-black tracking-tighter rounded uppercase">
-                {thumb.category || 'Portfolio'}
-              </span>
-              {thumb.stats && <span className="text-[10px] font-bold text-zinc-400">{thumb.stats}</span>}
+              {hasVariant && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowVariant(!showVariant);
+                  }}
+                  className={`px-3 py-2 ${showVariant ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'} rounded-xl text-[9px] font-black uppercase tracking-widest transition-all`}
+                >
+                  {showVariant ? 'Show Original' : 'Show Variant B'}
+                </button>
+              )}
             </div>
-            <h4 className="text-lg font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate tracking-tight">
-              {thumb.title}
-            </h4>
-            {thumb.description && (
-              <p className="text-xs text-zinc-500 leading-snug font-medium line-clamp-2">
-                {thumb.description}
-              </p>
-            )}
-          </div>
+          )}
+
+          {/* A/B Test Status (Non-Admin View) */}
+          {!isAdmin && hasVariant && (
+            <div className="flex items-center gap-2 pt-2">
+              <div className="p-1.5 bg-indigo-50 rounded-lg">
+                <RefreshCw size={12} className="text-indigo-600" />
+              </div>
+              <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider">A/B Testing Variant Live</p>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
+
   );
 };
 
 export const ThumbnailGallery = () => {
-  const isConnected = useFirestoreStatus();
   const [thumbnails, setThumbnails] = useState<Thumbnail[]>([]);
   const { isAdmin } = useAdmin();
   const [showForm, setShowForm] = useState(false);
@@ -312,13 +269,8 @@ export const ThumbnailGallery = () => {
   const [isRefiningAll, setIsRefiningAll] = useState(false);
   const [refiningId, setRefiningId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [lastDoc, setLastDoc] = useState<any>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [quotaExceeded, setQuotaExceeded] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -332,35 +284,6 @@ export const ThumbnailGallery = () => {
     onConfirm: () => {},
   });
 
-  // Smooth Scroll Logic
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const scrollContentRef = useRef<HTMLDivElement>(null);
-  const mouseX = useMotionValue(0);
-  const smoothX = useSpring(mouseX, { damping: 20, stiffness: 100, mass: 0.5 });
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!scrollContainerRef.current || !scrollContentRef.current) return;
-    
-    const rect = scrollContainerRef.current.getBoundingClientRect();
-    const contentWidth = scrollContentRef.current.scrollWidth;
-    const containerWidth = rect.width;
-    
-    if (contentWidth <= containerWidth) {
-      mouseX.set(0);
-      return;
-    }
-
-    const mouseXPos = e.clientX - rect.left;
-    const percentage = mouseXPos / containerWidth;
-    const targetX = -(contentWidth - containerWidth) * percentage;
-    
-    mouseX.set(targetX);
-  };
-
-  const handleMouseLeave = () => {
-    // Optional: Reset or keep position
-  };
-
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -368,273 +291,171 @@ export const ThumbnailGallery = () => {
   const [stats, setStats] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [imageUrlInput, setImageUrlInput] = useState('');
+  const [isABTest, setIsABTest] = useState(false);
+  const [variantImage, setVariantImage] = useState<string | null>(null);
+  const [variantImageUrlInput, setVariantImageUrlInput] = useState('');
+  const [variantStats, setVariantStats] = useState('');
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchThumbnails(true, false);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [activeFilter]);
-  useEffect(() => {
-    mouseX.set(0);
-  }, [thumbnails, activeFilter]);
+    fetchThumbnails();
+  }, []);
 
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    console.log('Current thumbnails state:', thumbnails.length, thumbnails);
-  }, [thumbnails]);
-
-  const fetchThumbnails = async (isInitial = false, force = false) => {
-    console.log(`Fetching thumbnails: initial=${isInitial}, force=${force}, filter=${activeFilter}`);
-    if (isInitial) {
-      setLoading(true);
-      if (force) setIsRefreshing(true);
-      setLastDoc(null);
-      setHasMore(true);
-      setError(null);
-    } else {
-      setLoadingMore(true);
-    }
-
+  const fetchThumbnails = async () => {
+    setLoading(true);
     try {
-      let q = query(
-        collection(db, 'thumbnails'),
-        orderBy('createdAt', 'desc'),
-        limit(PAGE_SIZE)
-      );
-      setQuotaExceeded(false);
-
-      if (activeFilter !== 'All') {
-        q = query(
-          collection(db, 'thumbnails'),
-          where('category', '==', activeFilter),
-          orderBy('createdAt', 'desc'),
-          limit(PAGE_SIZE)
-        );
+      const response = await fetch('/api/thumbnails');
+      if (response.ok) {
+        const data = await response.json();
+        setThumbnails(data);
       }
-
-      if (!isInitial && lastDoc) {
-        q = query(q, startAfter(lastDoc));
-      }
-
-      let newThumbnails: Thumbnail[];
-      
-      if (isInitial) {
-        const cacheKey = `thumbnails_v3_${activeFilter}_initial`;
-        newThumbnails = await getDocsCached(q, cacheKey, force) as Thumbnail[];
-        setThumbnails(newThumbnails);
-        
-        // Disable demo mode alert if we have real data (not fallback)
-        const hasRealData = newThumbnails.length > 0 && !(newThumbnails[0] as any).isFallback;
-        if (hasRealData) {
-          setQuotaExceeded(false);
-        } else if (newThumbnails.length > 0 && (newThumbnails[0] as any).isFallback) {
-          setQuotaExceeded(true);
-        }
-        setHasMore(newThumbnails.length >= PAGE_SIZE);
-        if (newThumbnails.length > 0) {
-          // We don't easily have the query snapshot docs here for pagination if it's cached
-          // but for first 12 items it's fine.
-        }
-      } else {
-        const snapshot = await getDocs(q);
-        newThumbnails = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Thumbnail[];
-        setThumbnails(prev => {
-          const existingIds = new Set(prev.map(t => t.id));
-          const uniqueNew = newThumbnails.filter(t => !existingIds.has(t.id));
-          return [...prev, ...uniqueNew];
-        });
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-        setHasMore(newThumbnails.length >= PAGE_SIZE);
-      }
-    } catch (err: any) {
-      console.error("Error fetching thumbnails:", err);
-      if (isQuotaExceededError(err)) {
-        setQuotaExceeded(true);
-        // Silent failover to fallback data via the thumbnails state update in getDocsCached
-        return;
-      }
-      if (err instanceof Error) {
-        const msg = err.message.toLowerCase();
-        const isNetworkError = msg.includes('network-request-failed') ||
-                              msg.includes('could not reach cloud firestore') ||
-                              msg.includes('timed out');
-        
-        if (isNetworkError) {
-          setQuotaExceeded(true);
-        } else if (msg.includes('index') || msg.includes('composite')) {
-          setError("Database index required. Please contact admin.");
-        } else {
-          setError("Failed to load thumbnails. Please try again.");
-        }
-      }
+    } catch (e) {
+      console.error("Failed to fetch thumbnails", e);
+      toast.error("Failed to load thumbnails");
     } finally {
       setLoading(false);
-      setLoadingMore(false);
-      setIsRefreshing(false);
     }
-  };
-
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login failed", error);
-    }
-  };
-
-  const handleLogout = () => signOut(auth);
-
-  const analyzeImage = async (base64: string, isRefining = false) => {
-    if (!isRefining) setIsAnalyzing(true);
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is missing. Please configure it in the Secrets panel.");
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: {
-          parts: [
-            {
-              text: `Analyze this YouTube thumbnail image. 
-              1. Generate a highly engaging, click-worthy title (max 60 chars).
-              2. Generate a brief, persuasive project description (max 150 chars).
-              3. Assign the most accurate category from this specific list: Gaming, Finance, Tech, Vlog, Lifestyle, Entertainment, Education, Music, Travel, Food, Sports.
-              
-              Context for categories:
-              - Gaming: Video games, esports, walkthroughs.
-              - Finance: Money, crypto, investing, business.
-              - Tech: Gadgets, software, AI, hardware.
-              - Vlog: Personal stories, daily life, challenges.
-              - Lifestyle: Health, fitness, fashion, home.
-              - Entertainment: Movies, comedy, reactions, celebrity.
-              - Education: Tutorials, science, history, learning.
-              - Music: Music videos, covers, production.
-              - Travel: Adventure, destination guides, exploration.
-              - Food: Cooking, reviews, eating.
-              - Sports: Athletics, highlights, training.
-
-              Return ONLY a JSON object with 'title', 'description', and 'category' fields.`,
-            },
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: base64.split(',')[1],
-              },
-            },
-          ],
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING, description: "A highly engaging, click-worthy title (max 60 chars)." },
-              description: { type: Type.STRING, description: "A brief, persuasive project description (max 150 chars)." },
-              category: { 
-                type: Type.STRING, 
-                enum: ['Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'],
-                description: "The most accurate category from the provided list."
-              }
-            },
-            required: ["title", "description", "category"]
-          }
-        },
-      });
-
-      const result = JSON.parse(response.text || '{}');
-      
-      // Normalize category
-      if (result.category) {
-        const validCategories = ['Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'];
-        const matched = validCategories.find(c => 
-          c.toLowerCase() === result.category.toLowerCase() || 
-          result.category.toLowerCase().includes(c.toLowerCase())
-        );
-        if (matched) result.category = matched;
-        else result.category = 'Portfolio'; // Fallback
-      }
-
-      if (isRefining) return result;
-      if (result.title) setTitle(result.title);
-      if (result.description) setDescription(result.description);
-      if (result.category) setCategory(result.category);
-    } catch (error) {
-      console.error("AI Analysis failed:", error);
-      return null;
-    } finally {
-      if (!isRefining) setIsAnalyzing(false);
-    }
-  };
-
-  const handleRefineAll = async () => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Refine All Thumbnails?',
-      message: 'This will automatically update titles and categories for ALL thumbnails using AI. This might take a while and use significant AI resources. Continue?',
-      isDestructive: false,
-      onConfirm: async () => {
-        setIsRefiningAll(true);
-        try {
-          for (const thumb of thumbnails) {
-            setRefiningId(thumb.id);
-            const result = await analyzeImage(thumb.imageUrl, true);
-            if (result && (result.title || result.category || result.description)) {
-              await updateDoc(doc(db, 'thumbnails', thumb.id), {
-                title: result.title || thumb.title,
-                description: result.description || thumb.description || '',
-                category: result.category || thumb.category || 'Portfolio'
-              });
-            }
-            // Small delay to prevent rate limits
-            await new Promise(r => setTimeout(r, 1000));
-          }
-          toast.success('All thumbnails refined successfully!');
-        } catch (err) {
-          console.error("Refine All failed:", err);
-          toast.error('Failed to refine all thumbnails');
-        } finally {
-          setRefiningId(null);
-          setIsRefiningAll(false);
-        }
-      }
-    });
   };
 
   const handleRefine = async (id: string, imageUrl: string) => {
     setRefiningId(id);
     try {
       const result = await analyzeImage(imageUrl, true);
-      if (result && (result.title || result.category || result.description)) {
-        await updateDoc(doc(db, 'thumbnails', id), {
-          title: result.title || '',
-          description: result.description || '',
-          category: result.category || 'Portfolio'
+      if (result) {
+        const response = await fetch(`/api/thumbnails/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: result.title || '',
+            description: result.description || '',
+            category: result.category || 'Portfolio'
+          })
         });
+        if (response.ok) {
+          const updated = await response.json();
+          setThumbnails(prev => prev.map(t => t.id === id ? updated : t));
+          toast.success("AI refined thumbnail successfully!");
+        }
       }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `thumbnails/${id}`);
+    } catch (e) {
+      console.error("Refine error", e);
+      toast.error("Failed to refine thumbnail");
     } finally {
       setRefiningId(null);
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDelete = async (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Confirm Delete',
+      message: 'Are you sure you want to delete this thumbnail? This will permanently remove it from your local database.',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/thumbnails/${id}`, { method: 'DELETE' });
+          if (response.ok) {
+            setThumbnails(prev => prev.filter(t => t.id !== id));
+            toast.success("Thumbnail deleted");
+          }
+        } catch (e) {
+          toast.error("Failed to delete");
+        }
+      }
+    });
+  };
+
+  const handleRefineAll = async () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Refine All with AI?',
+      message: 'This will process all thumbnails through AI to improve titles and categories. Continue?',
+      onConfirm: async () => {
+        setIsRefiningAll(true);
+        try {
+          for (const t of thumbnails) {
+            setRefiningId(t.id);
+            const result = await analyzeImage(t.imageUrl, true);
+            if (result) {
+              await fetch(`/api/thumbnails/${t.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title: result.title,
+                  description: result.description,
+                  category: result.category
+                })
+              });
+            }
+            await new Promise(r => setTimeout(r, 1000));
+          }
+          await fetchThumbnails();
+          toast.success("All thumbnails refined!");
+        } catch (e) {
+          toast.error("Failed to refine all");
+        } finally {
+          setIsRefiningAll(false);
+          setRefiningId(null);
+        }
+      }
+    });
+  };
+
+  const analyzeImage = async (base64: string, isRefining = false) => {
+    if (!isRefining) setIsAnalyzing(true);
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("No API Key");
+      
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: {
+          parts: [
+            { text: "Analyze this YouTube thumbnail image. Provide a high-conversion, catchy title (1-3 words), a brief engaging description (under 12 words), the most fitting category from the list, and an estimated realistic CTR (e.g., 12.4%) based on its visual appeal and niche. Return in JSON format with 'title', 'description', 'category', and 'stats' (e.g. 14.2% CTR). Categories: Gaming, Finance, Tech, Vlog, Lifestyle, Entertainment, Education, Music, Travel, Food, Sports." },
+            { inlineData: { mimeType: "image/jpeg", data: base64.split(',')[1] } }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              category: { type: Type.STRING },
+              stats: { type: Type.STRING }
+            }
+          }
+        }
+      });
+      
+      const result = JSON.parse(response.text || '{}');
+      if (isRefining) return result;
+      
+      if (result.title) setTitle(result.title);
+      if (result.description) setDescription(result.description);
+      if (result.category) setCategory(result.category);
+      if (result.stats) setStats(result.stats);
+    } catch (e) {
+      console.error("AI Analysis failed", e);
+    } finally {
+      if (!isRefining) setIsAnalyzing(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'main' | 'variant') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64 = reader.result as string;
         const compressed = await compressImage(base64);
-        setImage(compressed);
-        analyzeImage(compressed);
+        if (target === 'main') {
+          setImage(compressed);
+          analyzeImage(compressed);
+        } else {
+          setVariantImage(compressed);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -642,515 +463,240 @@ export const ThumbnailGallery = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalImageUrl = imageUrlInput.trim() || image;
-    if (!title.trim() || !finalImageUrl || isSubmitting) return;
+    if (!title.trim() || !image || isSubmitting) return;
 
     setIsSubmitting(true);
-    const toastId = toast.loading('Adding thumbnail...');
     try {
-      const docRef = await addDoc(collection(db, 'thumbnails'), {
+      const data = {
         title: title.trim(),
         description: description.trim(),
         category,
-        stats: stats.trim() || '0 views',
-        imageUrl: finalImageUrl,
-        createdAt: serverTimestamp()
-      });
-      
-      // Update local state immediately for better UX
-      const newThumb: Thumbnail = {
-        id: docRef.id,
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        stats: stats.trim() || '0 views',
-        imageUrl: finalImageUrl,
-        createdAt: new Date()
+        stats: stats.trim() || 'NEW',
+        imageUrl: image,
+        variantImageUrl: isABTest ? variantImage : undefined,
+        variantStats: isABTest ? variantStats : undefined,
+        abTestActive: isABTest,
+        id: `thumb-${Date.now()}`
       };
-      setThumbnails(prev => [newThumb, ...prev]);
-      
-      // Clear cache so next fetch gets fresh data
-      clearCache('thumbnails');
-      clearCache('thumbnails_v3');
-      clearCache('thumbnails_featured_hp_v2');
-      clearCache('thumbnails_decorations_hp');
-      clearCache('hero_floating_thumbnails');
-      
-      setTitle('');
-      setDescription('');
-      setStats('');
-      setImage(null);
-      setImageUrlInput('');
-      setShowForm(false);
-      toast.success('Thumbnail added to portfolio!', { id: toastId });
-    } catch (err) {
-      toast.error('Failed to add thumbnail', { id: toastId });
-      handleFirestoreError(err, OperationType.CREATE, 'thumbnails');
+
+      const response = await fetch('/api/thumbnails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        const saved = await response.json();
+        setThumbnails(prev => [saved, ...prev]);
+        setShowForm(false);
+        setTitle('');
+        setDescription('');
+        setImage(null);
+        toast.success("Thumbnail uploaded successfully!");
+      }
+    } catch (e) {
+      toast.error("Failed to upload");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Delete Thumbnail?',
-      message: 'Are you sure you want to delete this thumbnail? This action cannot be undone.',
-      isDestructive: true,
-      onConfirm: async () => {
-        const toastId = toast.loading('Deleting thumbnail...');
-        try {
-          await deleteDoc(doc(db, 'thumbnails', id));
-          
-          // Update local state immediately
-          setThumbnails(prev => prev.filter(t => t.id !== id));
-          
-          // Clear cache
-          clearCache('thumbnails');
-          clearCache('thumbnails_v3_');
-          clearCache('thumbnails_featured_hp_v2');
-          clearCache('thumbnails_decorations_hp');
-          
-          toast.success('Thumbnail deleted', { id: toastId });
-        } catch (err) {
-          toast.error('Failed to delete thumbnail', { id: toastId });
-          handleFirestoreError(err, OperationType.DELETE, 'thumbnails');
-        }
-      }
-    });
-  };
-
   const filteredThumbnails = useMemo(() => {
     let filtered = thumbnails;
-    if (activeFilter !== 'All') {
-      filtered = filtered.filter(t => t.category === activeFilter);
+    if (activeFilter !== 'All') filtered = filtered.filter(t => t.category === activeFilter);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(t => t.title.toLowerCase().includes(q) || t.category?.toLowerCase().includes(q));
     }
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(t => 
-        t.title.toLowerCase().includes(query) || 
-        t.category?.toLowerCase().includes(query)
-      );
-    }
-    console.log(`Filtered thumbnails count: ${filtered.length}`);
     return filtered;
   }, [thumbnails, activeFilter, searchQuery]);
 
   return (
-    <section className="mt-20">
-      <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-4">
-            <h2 className="text-3xl font-bold tracking-tight">Live <span className="text-blue-600">Thumbnails</span></h2>
-            {quotaExceeded && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[10px] font-bold uppercase tracking-widest animate-pulse">
-                <AlertCircle size={12} />
-                Offline Mode
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => fetchThumbnails(true, true)}
-                className={`p-2 bg-zinc-100 text-zinc-600 rounded-full hover:bg-zinc-200 transition-all ${loading ? 'animate-spin' : ''}`}
-                title="Refresh Gallery"
-              >
-                <RefreshCw size={16} />
-              </button>
-              {isAdmin && (
-                <>
-                  <button 
-                    onClick={() => setShowForm(!showForm)}
-                    className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all shadow-lg"
-                    title="Add New Thumbnail"
-                  >
-                    {showForm ? <X size={20} /> : <Plus size={20} />}
-                  </button>
-                  <button 
-                    onClick={handleRefineAll}
-                    disabled={isRefiningAll}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-all border border-blue-200 text-[10px] font-bold uppercase tracking-widest disabled:opacity-50"
-                    title="Refine All with AI"
-                  >
-                    {isRefiningAll ? <ZSpinner size={14} /> : <Sparkles size={14} />}
-                    {isRefiningAll ? 'Refining...' : 'Refine All'}
-                  </button>
-                  <button 
-                    onClick={() => {
-                      clearAllCache();
-                      fetchThumbnails(true, true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-100 text-zinc-600 rounded-full hover:bg-zinc-200 transition-all border border-zinc-200 text-[10px] font-bold uppercase tracking-widest"
-                    title="Clear All Cache"
-                  >
-                    <Trash2 size={14} />
-                    Clear Cache
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      const toastId = toast.loading('Adding placeholder...');
-                      try {
-                        const docRef = await addDoc(collection(db, 'thumbnails'), {
-                          title: "Sample Placeholder " + Math.floor(Math.random() * 1000),
-                          category: "Gaming",
-                          stats: "10K views",
-                          imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450`,
-                          createdAt: serverTimestamp()
-                        });
-                        
-                        // Update local state
-                        const newThumb: Thumbnail = {
-                          id: docRef.id,
-                          title: "Sample Placeholder",
-                          category: "Gaming",
-                          stats: "10K views",
-                          imageUrl: `https://picsum.photos/seed/${Math.random()}/800/450`,
-                          createdAt: new Date()
-                        };
-                        setThumbnails(prev => [newThumb, ...prev]);
-                        
-                        clearCache('thumbnails_v3_');
-                        toast.success('Placeholder added!', { id: toastId });
-                      } catch (e) {
-                        toast.error('Failed to add placeholder', { id: toastId });
-                        handleFirestoreError(e, OperationType.CREATE, 'thumbnails');
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-50 text-zinc-600 rounded-full hover:bg-zinc-100 transition-all border border-zinc-200 text-[10px] font-bold uppercase tracking-widest"
-                    title="Add Placeholder Thumbnail"
-                  >
-                    <ImageIcon size={14} />
-                    Add Placeholder
-                  </button>
-                </>
-              )}
-            </div>
+    <section className="mt-20 px-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
+          <div>
+            <h2 className="text-4xl font-bold tracking-tight">Main <span className="text-blue-600">Gallery</span></h2>
+            <p className="text-zinc-500 text-sm mt-1">High-performance designs for top-tier creators.</p>
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-            Note: High-quality thumbnails may take a moment to load.
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          {!auth.currentUser ? (
+          
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <>
+                <button 
+                  onClick={() => setShowForm(!showForm)}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-full font-bold text-xs uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center gap-2 shadow-xl"
+                >
+                  {showForm ? <X size={16} /> : <Plus size={16} />}
+                  {showForm ? 'Close Form' : 'Add New'}
+                </button>
+                <button 
+                  onClick={handleRefineAll}
+                  disabled={isRefiningAll || thumbnails.length === 0}
+                  className="p-3 bg-white border border-black/5 text-blue-600 rounded-full hover:bg-blue-50 transition-all shadow-sm"
+                  title="Refine All with AI"
+                >
+                  {isRefiningAll ? <ZSpinner size={16} /> : <Sparkles size={16} />}
+                </button>
+              </>
+            )}
             <button 
-              onClick={handleLogin}
-              className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-blue-600 flex items-center gap-2"
+              onClick={fetchThumbnails}
+              className="p-3 bg-white border border-black/5 text-zinc-500 rounded-full hover:bg-zinc-50 transition-all shadow-sm"
+              title="Refresh"
             >
-              <LogIn size={14} />
-              Admin Login
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
-          ) : (
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                Logged in as {auth.currentUser.displayName}
-              </span>
-              <button 
-                onClick={handleLogout}
-                className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"
-              >
-                <LogOut size={14} />
-                Logout
-              </button>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
 
-      <AnimatePresence>
-        {showForm && isAdmin && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden mb-12"
-          >
-            <div className="glass-card p-8 rounded-[2.5rem] border border-blue-600/10 shadow-xl max-w-2xl mx-auto relative">
-              {isAnalyzing && (
-                <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-[2.5rem]">
-                  <ZSpinner size={32} className="mb-4" />
-                  <p className="text-sm font-bold text-blue-600 uppercase tracking-widest animate-pulse">AI is analyzing thumbnail...</p>
-                </div>
-              )}
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Project Title</label>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="e.g. MrBeast Challenge"
-                      className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Description</label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Enter a brief project description..."
-                      rows={3}
-                      className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm resize-none"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Category</label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm appearance-none"
-                    >
-                      {['Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'].map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Stats (e.g. 150K views)</label>
-                    <input
-                      type="text"
-                      value={stats}
-                      onChange={(e) => setStats(e.target.value)}
-                      placeholder="e.g. 150K views"
-                      className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm"
-                    />
-                  </div>
-                </div>
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2 mb-12">
+          {['All', 'Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'].map(f => (
+            <button
+              key={f}
+              onClick={() => setActiveFilter(f)}
+              className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                activeFilter === f ? 'bg-blue-600 text-white shadow-lg' : 'bg-white border border-black/5 text-zinc-500 hover:bg-zinc-50'
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Thumbnail Image URL (ImgBB, etc.)</label>
-                    <div className="relative">
-                      <input
-                        type="url"
-                        value={imageUrlInput}
-                        onChange={(e) => setImageUrlInput(e.target.value)}
-                        placeholder="Paste direct image link here..."
-                        className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-blue-600/50 transition-all text-sm"
+        {/* Upload Form */}
+        <AnimatePresence>
+          {showForm && isAdmin && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden mb-12"
+            >
+              <form onSubmit={handleSubmit} className="bg-zinc-50 rounded-3xl p-8 border border-black/5 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div className="aspect-video bg-white border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
+                      {image ? (
+                        <img src={image} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 text-zinc-400">
+                          <ImageIcon size={32} />
+                          <p className="text-[10px] uppercase font-bold tracking-widest">Select Main Thumbnail</p>
+                        </div>
+                      )}
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => handleImageUpload(e, 'main')}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
                       />
-                      {imageUrlInput && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg overflow-hidden border border-black/10 bg-white">
-                            <img src={imageUrlInput} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.src = "https://placehold.co/100x100?text=Error")} />
-                          </div>
+                      {isAnalyzing && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center text-white gap-3">
+                          <ZSpinner size={24} />
+                          <span className="text-xs font-bold uppercase tracking-widest">AI Analyzing...</span>
                         </div>
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4 py-2">
-                    <div className="flex-grow h-[1px] bg-black/5" />
-                    <span className="text-[8px] font-bold text-zinc-300 uppercase tracking-widest">or upload file</span>
-                    <div className="flex-grow h-[1px] bg-black/5" />
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <label className="flex-1 flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-black/5 rounded-3xl hover:border-blue-600/30 transition-all cursor-pointer bg-black/[0.01]">
-                      <ImageIcon size={32} className="text-zinc-300" />
-                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Select Image</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                    </label>
-                    {(image || imageUrlInput) && (
-                      <div className="w-32 h-32 rounded-2xl overflow-hidden border border-black/5 relative group">
-                        <img src={imageUrlInput || image || ""} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setImage(null);
-                            setImageUrlInput('');
-                          }}
-                          className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                        >
-                          <X size={20} />
-                        </button>
+
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox" 
+                        id="abtest" 
+                        checked={isABTest} 
+                        onChange={(e) => setIsABTest(e.target.checked)} 
+                        className="w-4 h-4 accent-blue-600"
+                      />
+                      <label htmlFor="abtest" className="text-xs font-bold uppercase tracking-widest text-zinc-600 cursor-pointer select-none">Enable A/B Test Variant</label>
+                    </div>
+
+                    {isABTest && (
+                      <div className="aspect-video bg-white border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group">
+                        {variantImage ? (
+                          <img src={variantImage} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 text-zinc-400">
+                            <Plus size={32} />
+                            <p className="text-[10px] uppercase font-bold tracking-widest">Select Variant B Image</p>
+                          </div>
+                        )}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={(e) => handleImageUpload(e, 'variant')}
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
                       </div>
                     )}
                   </div>
+
+                  <div className="space-y-4">
+                    <input 
+                      type="text" 
+                      placeholder="Title" 
+                      value={title} 
+                      onChange={(e) => setTitle(e.target.value)} 
+                      className="w-full bg-white px-6 py-4 rounded-xl border border-black/5 outline-none focus:border-blue-500 transition-all font-bold text-sm"
+                    />
+                    <textarea 
+                      placeholder="Description" 
+                      value={description} 
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="w-full bg-white px-6 py-4 rounded-xl border border-black/5 outline-none focus:border-blue-500 transition-all font-medium text-sm h-32 resize-none"
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                      <select 
+                        value={category} 
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="bg-white px-6 py-4 rounded-xl border border-black/5 outline-none focus:border-blue-500 transition-all font-bold text-xs uppercase tracking-widest"
+                      >
+                        {['Gaming', 'Finance', 'Tech', 'Vlog', 'Lifestyle', 'Entertainment', 'Education', 'Music', 'Travel', 'Food', 'Sports'].map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      <input 
+                        type="text" 
+                        placeholder="Stats (e.g. 15.4% CTR)" 
+                        value={stats} 
+                        onChange={(e) => setStats(e.target.value)}
+                        className="bg-white px-6 py-4 rounded-xl border border-black/5 outline-none focus:border-blue-500 transition-all font-bold text-xs"
+                      />
+                    </div>
+                    {isABTest && (
+                      <input 
+                        type="text" 
+                        placeholder="Variant B Stats (e.g. 20.1% CTR)" 
+                        value={variantStats} 
+                        onChange={(e) => setVariantStats(e.target.value)}
+                        className="w-full bg-white px-6 py-4 rounded-xl border border-black/5 outline-none focus:border-blue-500 transition-all font-bold text-xs text-blue-600"
+                      />
+                    )}
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting || !title || !image}
+                      className="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold uppercase tracking-[0.2em] text-xs hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50"
+                    >
+                      {isSubmitting ? <ZSpinner size={20} /> : 'Publish to Portfolio'}
+                    </button>
+                  </div>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-5 bg-blue-600 text-white rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-lg disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <ZSpinner size={18} />
-                  ) : (
-                    <>
-                      Add to Portfolio
-                      <Send size={18} />
-                    </>
-                  )}
-                </button>
               </form>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Error State */}
-      {error && !loading && (
-        <div className="bg-red-50 border border-red-100 rounded-3xl p-12 text-center mb-12">
-          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertCircle size={32} />
-          </div>
-          <h3 className="text-xl font-bold text-red-900 mb-2">{error}</h3>
-          <p className="text-red-600/70 mb-8 max-w-md mx-auto">There was an issue connecting to the database. Please check your connection or try again later.</p>
-          <button 
-            onClick={() => fetchThumbnails(true)}
-            className="px-8 py-3 bg-red-600 text-white rounded-full font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200"
-          >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* Quota Exceeded Overlay */}
-      <AnimatePresence>
-        {quotaExceeded && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-center gap-4 text-amber-800"
-          >
-            <div className="p-3 bg-amber-100 rounded-full">
-              <Sparkles className="text-amber-600" size={24} />
-            </div>
-            <div className="flex-grow text-center md:text-left">
-              <h4 className="font-bold text-lg">Connection Status: Demo Samples Active</h4>
-              <p className="text-sm opacity-90">
-                The database connection is currently limited. We've loaded our offline high-res samples! 
-                If you are the admin, your live uploads are still safe in the database.
-              </p>
-            </div>
-            <button 
-              onClick={() => fetchThumbnails(true, true)}
-              className="px-6 py-2 bg-amber-200 hover:bg-amber-300 rounded-xl text-sm font-bold transition-colors"
-            >
-              Reconnect
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        isDestructive={confirmModal.isDestructive}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-      />
-
-      {/* Offline Warning */}
-      {!isConnected && (
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8 p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-3 text-orange-700"
-        >
-          <AlertCircle size={20} />
-          <div className="text-xs font-bold uppercase tracking-widest">
-            Database is currently offline. Showing cached data if available.
-          </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="ml-auto px-4 py-2 bg-orange-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-orange-700 transition-all"
-          >
-            Reconnect
-          </button>
-        </motion.div>
-      )}
-
-      {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-12">
-        <div className="flex flex-wrap gap-2 justify-center md:justify-start items-center">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveFilter(cat)}
-              className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all relative ${
-                activeFilter === cat 
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-                  : 'bg-white text-zinc-500 hover:bg-zinc-100 border border-black/5'
-              }`}
-            >
-              {cat}
-              {activeFilter === cat && (
-                <motion.div 
-                  layoutId="activeFilter"
-                  className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full border border-white"
-                />
-              )}
-            </button>
-          ))}
-          
-          <button
-            onClick={() => fetchThumbnails(true, true)}
-            disabled={loading || isRefreshing}
-            className={`p-2 rounded-full bg-white border border-black/5 text-zinc-400 hover:text-blue-600 hover:border-blue-600/20 transition-all shadow-sm ml-2 ${
-              isRefreshing ? 'animate-spin' : ''
-            }`}
-            title="Refresh Gallery"
-          >
-            <Loader2 size={14} />
-          </button>
-        </div>
-
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-          <input 
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search projects..."
-            className="w-full bg-white border border-black/5 rounded-full py-3 pl-12 pr-6 focus:outline-none focus:border-blue-600/30 transition-all text-xs font-bold uppercase tracking-widest placeholder:text-zinc-300 shadow-sm"
-          />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
-            >
-              <X size={14} />
-            </button>
+            </motion.div>
           )}
-        </div>
-      </div>
+        </AnimatePresence>
 
-      {loading && thumbnails.length === 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {[...Array(PAGE_SIZE)].map((_, i) => (
-            <ThumbnailSkeleton key={i} />
-          ))}
-        </div>
-      ) : filteredThumbnails.length === 0 ? (
-        <div className="space-y-12 relative min-h-[400px] flex items-center justify-center">
-          <div className="text-center p-20 bg-zinc-50 border-2 border-dashed border-black/5 rounded-[3rem] w-full">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-              <Search size={24} className="text-zinc-300" />
-            </div>
-            <h3 className="text-xl font-bold text-zinc-900 mb-2">No Projects Found</h3>
-            <p className="text-zinc-500 max-w-xs mx-auto text-sm">We couldn't find any projects matching your search or filter. Try a different category!</p>
-            <button 
-              onClick={() => {
-                setActiveFilter('All');
-                setSearchQuery('');
-              }}
-              className="mt-6 px-8 py-3 bg-white border border-black/5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-sm"
-            >
-              Show All Projects
-            </button>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3, 4, 5, 6].map(n => <ZSkeleton key={n} className="aspect-video rounded-3xl" />)}
           </div>
-        </div>
-      ) : (
-        <div className="space-y-12 relative">
-          {/* Loading status (removed overlay spinner as per request) */}
-          {/* {loading && (
-            <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-40 flex items-center justify-center rounded-3xl">
-              <ZSpinner size={60} />
-            </div>
-          )} */}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-12 py-10">
+        ) : filteredThumbnails.length === 0 ? (
+          <div className="text-center py-20 bg-zinc-50 rounded-3xl border border-dashed border-zinc-200">
+            <ImageIcon className="mx-auto text-zinc-300 mb-4" size={48} />
+            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">No thumbnails found in this category.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredThumbnails.map((thumb, i) => (
               <ThumbnailItem 
                 key={thumb.id}
@@ -1163,30 +709,17 @@ export const ThumbnailGallery = () => {
               />
             ))}
           </div>
+        )}
+      </div>
 
-          {hasMore && (
-            <div className="flex justify-center pt-8">
-              <button
-                onClick={() => fetchThumbnails(false)}
-                disabled={loadingMore}
-                className="group flex items-center gap-3 px-10 py-4 bg-white border border-black/5 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-black hover:text-white transition-all duration-500 shadow-sm hover:shadow-xl disabled:opacity-50"
-              >
-                {loadingMore ? (
-                  <>
-                    Loading...
-                    <ZSpinner size={16} />
-                  </>
-                ) : (
-                  <>
-                    Load More Projects
-                    <Plus size={16} className="group-hover:rotate-90 transition-transform duration-500" />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        title={confirmModal.title} 
+        message={confirmModal.message} 
+        onConfirm={confirmModal.onConfirm} 
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
+        isDestructive={confirmModal.isDestructive}
+      />
     </section>
   );
 };

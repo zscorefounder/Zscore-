@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useInView } from 'motion/react';
-import { Star, Send, User, MessageSquare, AlertCircle, Image as ImageIcon, X } from 'lucide-react';
+import { Star, Send, User, MessageSquare, AlertCircle, Image as ImageIcon, X, Trash2 } from 'lucide-react';
 import { ZSpinner } from './ZLoading';
-import { db, collection, addDoc, query, orderBy, serverTimestamp, handleFirestoreError, OperationType, limit, getDocsCached, isQuotaExceededError } from '../firebase';
-import { useRef } from 'react';
+import { useAdmin } from '../hooks/useAdmin';
+import { toast } from 'sonner';
 
 interface Comment {
   id: string;
@@ -11,7 +11,7 @@ interface Comment {
   comment: string;
   rating: number;
   image?: string;
-  createdAt: any;
+  createdAt: string;
 }
 
 const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.5): Promise<string> => {
@@ -40,16 +40,12 @@ const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800, quali
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
       
-      // Try to get a size under 800KB (to account for base64 overhead)
       let currentQuality = quality;
       let result = canvas.toDataURL('image/jpeg', currentQuality);
-      
-      // If still too large, reduce quality further
-      while (result.length > 1000000 && currentQuality > 0.1) {
+      while (result.length > 800000 && currentQuality > 0.1) {
         currentQuality -= 0.1;
         result = canvas.toDataURL('image/jpeg', currentQuality);
       }
-      
       resolve(result);
     };
   });
@@ -62,34 +58,30 @@ export const CommentsSection = () => {
   const [rating, setRating] = useState(5);
   const [image, setImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { isAdmin } = useAdmin();
   
   const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(sectionRef, { once: false, amount: 0.1 });
 
   useEffect(() => {
-    if (!isInView) return;
-
-    const fetchComments = async () => {
-      try {
-        const q = query(
-          collection(db, 'comments'), 
-          orderBy('createdAt', 'desc'),
-          limit(20)
-        );
-        const docs = await getDocsCached(q, 'comments_limit_20') as Comment[];
-        setComments(docs);
-      } catch (err) {
-        if (isQuotaExceededError(err)) {
-          console.warn("CommentsSection: Quota exceeded, using fallback via getDocsCached");
-          return;
-        }
-        handleFirestoreError(err, OperationType.LIST, 'comments');
-      }
-    };
-
     fetchComments();
   }, [isInView]);
+
+  const fetchComments = async () => {
+    if (!isInView) return;
+    try {
+      const resp = await fetch('/api/comments');
+      if (resp.ok) {
+        const data = await resp.json();
+        setComments(data);
+      }
+    } catch (e) {
+      console.error("Fetch comments failed", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -109,209 +101,236 @@ export const CommentsSection = () => {
     if (!name.trim() || !comment.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
-    setError(null);
-
     try {
-      await addDoc(collection(db, 'comments'), {
+      const data = {
         name: name.trim(),
         comment: comment.trim(),
         rating,
-        image,
-        createdAt: serverTimestamp()
+        image: image || undefined
+      };
+
+      const resp = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
       });
-      setName('');
-      setComment('');
-      setRating(5);
-      setImage(null);
-    } catch (err) {
-      setError('Failed to post comment. Please try again.');
-      handleFirestoreError(err, OperationType.CREATE, 'comments');
+
+      if (resp.ok) {
+        const result = await resp.json();
+        setComments(prev => [result, ...prev]);
+        setName('');
+        setComment('');
+        setImage(null);
+        setRating(5);
+        toast.success("Thanks for your feedback!");
+      }
+    } catch (e) {
+      toast.error("Failed to post comment");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this comment?")) return;
+    try {
+      const resp = await fetch(`/api/comments/${id}`, { method: 'DELETE' });
+      if (resp.ok) {
+        setComments(prev => prev.filter(c => c.id !== id));
+        toast.success("Comment deleted");
+      }
+    } catch (e) {
+      toast.error("Failed to delete");
+    }
+  };
+
   return (
-    <section id="comments" ref={sectionRef} className="section-padding px-6 max-w-7xl mx-auto">
-      <div className="text-center mb-16 space-y-4">
-        <h3 className="text-neon-blue font-bold uppercase tracking-widest text-sm">Community</h3>
-        <h2 className="text-4xl md:text-5xl font-display font-bold">Drop a <span className="text-gradient">Comment.</span></h2>
-        <p className="text-zinc-500 max-w-2xl mx-auto text-sm">Share your thoughts or feedback with the Z Score community.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-        {/* Comment Form */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          className="glass-card p-8 md:p-12 rounded-[2.5rem] border border-black/5 shadow-xl h-fit"
-        >
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Your Name</label>
-              <div className="relative">
-                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Alex Rivers"
-                  className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-4 pl-14 pr-6 focus:outline-none focus:border-neon-blue/50 transition-all text-sm"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Rating</label>
-              <div className="flex gap-2 ml-4">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setRating(star)}
-                    className="transition-transform hover:scale-110"
-                  >
-                    <Star
-                      size={24}
-                      className={`${star <= rating ? 'text-neon-blue fill-current' : 'text-zinc-200'}`}
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 ml-4">Your Comment</label>
-              <div className="relative">
-                <MessageSquare className="absolute left-5 top-6 text-zinc-400" size={18} />
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="What's on your mind?"
-                  rows={4}
-                  className="w-full bg-black/[0.02] border border-black/5 rounded-2xl py-6 pl-14 pr-6 focus:outline-none focus:border-neon-blue/50 transition-all text-sm resize-none"
-                  required
-                />
-              </div>
-            </div>
-
-            {image && (
-              <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-black/5">
-                <img src={image} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
-                <button 
-                  type="button"
-                  onClick={() => setImage(null)}
-                  className="absolute top-1 right-1 p-1 bg-black/50 text-white rounded-full hover:bg-black transition-colors"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between px-4">
-              <label className="flex items-center gap-2 text-zinc-500 hover:text-neon-blue cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-widest">
-                <ImageIcon size={18} />
-                <span>Add Image</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-              </label>
-            </div>
-
-            {error && (
-              <div className="flex items-center gap-2 text-red-500 text-xs ml-4">
-                <AlertCircle size={14} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-5 bg-black text-white rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-zinc-900 transition-all disabled:opacity-50"
+    <section ref={sectionRef} id="comments" className="py-24 px-6 bg-white overflow-hidden">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start mb-16 gap-10">
+          <div className="max-w-xl">
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              animate={isInView ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.8 }}
             >
-              {isSubmitting ? (
-                <>
-                  <ZSpinner size={18} />
-                  Posting...
-                </>
-              ) : (
-                <>
-                  Post Comment
-                  <Send size={18} />
-                </>
-              )}
-            </button>
-          </form>
-        </motion.div>
+              <h2 className="text-4xl md:text-5xl font-black text-zinc-900 mb-6 leading-tight uppercase tracking-tighter">
+                CLIENT <span className="text-blue-600 block">FEEDBACK</span>
+              </h2>
+              <p className="text-zinc-600 text-lg leading-relaxed font-medium">
+                Hear from creators who've elevated their YouTube presence with our professional designs.
+              </p>
+            </motion.div>
+          </div>
 
-        {/* Comments List */}
-        <div className="space-y-6 max-h-[600px] overflow-y-auto pr-4 scrollbar-hide">
-          <AnimatePresence mode="popLayout">
-            {comments.length === 0 ? (
-              <div className="text-center py-20 text-zinc-400 italic text-sm">
-                No comments yet. Be the first to drop one!
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={isInView ? { opacity: 1, scale: 1 } : {}}
+            className="flex items-center gap-4 bg-zinc-50 p-6 rounded-2xl border border-zinc-100 shadow-sm"
+          >
+            <div className="flex -space-x-2">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-zinc-200 flex items-center justify-center overflow-hidden">
+                  <User size={20} className="text-zinc-400" />
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="flex text-amber-500 gap-0.5">
+                {[1, 2, 3, 4, 5].map(i => <Star key={i} size={12} fill="currentColor" />)}
               </div>
-            ) : (
-              comments.map((c) => (
-                <motion.div
-                  key={c.id}
-                  layout
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="group relative p-6 bg-white rounded-2xl rounded-tr-none border border-black/5 hover:border-neon-blue/20 transition-all overflow-hidden"
-                >
-                  {/* Paper Fold Effect */}
-                  <div className="absolute top-0 right-0 w-8 h-8 z-20">
-                    <div className="absolute top-0 right-0 w-full h-full bg-zinc-50 group-hover:bg-blue-50 transition-colors duration-500 rounded-bl-lg shadow-[-1px_1px_3px_rgba(0,0,0,0.02)]" />
-                    <div className="absolute top-0 right-0 w-full h-full bg-white -z-10" />
+              <p className="text-[10px] font-bold text-zinc-500 tracking-widest uppercase mt-1">
+                {comments.length}+ Happy Clients
+              </p>
+            </div>
+          </motion.div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          {/* Form */}
+          <div className="lg:col-span-5">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={isInView ? { opacity: 1, y: 0 } : {}}
+              className="bg-zinc-900 rounded-3xl p-8 shadow-2xl relative overflow-hidden group"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-blue-600/20 transition-all duration-700" />
+              
+              <h3 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
+                <MessageSquare className="text-blue-500" />
+                Leave a Review
+              </h3>
+
+              <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setRating(star)}
+                        className={`transition-all ${rating >= star ? 'text-amber-400 scale-110' : 'text-zinc-700 hover:text-zinc-500'}`}
+                      >
+                        <Star size={24} fill={rating >= star ? "currentColor" : "none"} />
+                      </button>
+                    ))}
                   </div>
 
-                  <div className="flex items-center justify-between mb-4 relative z-10">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-neon-blue/10 flex items-center justify-center text-neon-blue font-bold">
-                        {c.name[0].toUpperCase()}
+                  <input
+                    type="text"
+                    placeholder="Your Name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white p-4 rounded-xl outline-none focus:border-blue-500 transition-all font-bold placeholder:text-zinc-600"
+                  />
+
+                  <textarea
+                    placeholder="Your Feedback..."
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    required
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white p-4 rounded-xl outline-none focus:border-blue-500 transition-all h-32 resize-none font-medium placeholder:text-zinc-600"
+                  />
+
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer group/upload">
+                      <div className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 group-hover/upload:bg-zinc-700 transition-all">
+                        {image ? <X size={20} className="text-red-400" onClick={(e) => { e.preventDefault(); setImage(null); }} /> : <ImageIcon size={20} />}
                       </div>
-                      <div>
-                        <div className="text-sm font-bold text-zinc-900">{c.name}</div>
-                        <div className="flex gap-0.5">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              size={10}
-                              className={`${i < c.rating ? 'text-neon-blue fill-current' : 'text-zinc-200'}`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] text-zinc-400">
-                      {c.createdAt ? (
-                        (() => {
-                          const date = c.createdAt.toDate ? c.createdAt.toDate() : new Date(c.createdAt);
-                          const now = new Date();
-                          const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-                          if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60) || 1}m ago`;
-                          if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-                          if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-                          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        })()
-                      ) : 'Recently'}
-                    </span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 group-hover/upload:text-zinc-300">
+                        {image ? 'Image Attached' : 'Attach Result'}
+                      </span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleImageUpload} 
+                        className="hidden" 
+                      />
+                    </label>
                   </div>
-                  <p className="text-zinc-600 text-sm leading-relaxed mb-4">
-                    "{c.comment}"
-                  </p>
-                  {c.image && (
-                    <div className="rounded-2xl overflow-hidden border border-black/5 mb-4 max-w-full">
-                      <img src={c.image} alt="Comment attachment" className="w-full h-auto" referrerPolicy="no-referrer" loading="lazy" />
+
+                  {image && (
+                    <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-zinc-700">
+                      <img src={image} className="w-full h-full object-cover" />
+                      <button 
+                        onClick={() => setImage(null)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-lg backdrop-blur-md"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                   )}
-                </motion.div>
-              ))
-            )}
-          </AnimatePresence>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !name || !comment}
+                  className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-blue-700 transition-all shadow-xl disabled:opacity-50 active:scale-[0.98]"
+                >
+                  {isSubmitting ? <ZSpinner size={20} /> : (
+                    <span className="flex items-center justify-center gap-2">
+                      Send Review <Send size={14} />
+                    </span>
+                  )}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+
+          {/* List */}
+          <div className="lg:col-span-7">
+            <div className="space-y-6">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <ZSpinner size={40} />
+                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Loading feedback...</p>
+                </div>
+              ) : comments.length === 0 ? (
+                <div className="bg-zinc-50 rounded-3xl p-12 text-center border border-zinc-100">
+                  <MessageSquare size={48} className="mx-auto text-zinc-200 mb-6" />
+                  <p className="text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Be the first to leave a review!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-6 max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
+                  <AnimatePresence mode="popLayout">
+                    {comments.map((cmt, idx) => (
+                      <motion.div
+                        key={cmt.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ delay: idx * 0.1 }}
+                        className="p-6 bg-white border border-zinc-100 rounded-3xl group hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all relative"
+                      >
+                        {isAdmin && (
+                          <button 
+                            onClick={() => handleDelete(cmt.id)}
+                            className="absolute top-4 right-4 p-2 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                        <div className="flex items-start gap-4 mb-4">
+                          <div className="w-12 h-12 bg-zinc-100 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-zinc-400 overflow-hidden">
+                            {cmt.image ? <img src={cmt.image} className="w-full h-full object-cover" /> : cmt.name[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-zinc-900 group-hover:text-blue-600 transition-colors">{cmt.name}</h4>
+                            <div className="flex text-amber-500 gap-0.5 mt-0.5">
+                              {[1, 2, 3, 4, 5].map(i => <Star key={i} size={10} fill={i <= cmt.rating ? "currentColor" : "none"} className={i > cmt.rating ? "text-zinc-200" : ""} />)}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-zinc-600 text-sm leading-relaxed mb-4 italic">"{cmt.comment}"</p>
+                        <div className="text-[9px] font-bold text-zinc-300 uppercase tracking-widest">{new Date(cmt.createdAt).toLocaleDateString()}</div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </section>

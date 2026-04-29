@@ -1,0 +1,23 @@
+[
+  {
+    "id": "initial-1",
+    "title": "Hustle Ninjas: Growth Strategy",
+    "description": "High-CTR design for finance and motivation niche.",
+    "category": "Finance",
+    "stats": "+12.4% CTR",
+    "imageUrl": "https://i.ibb.co/6R0D4Hn/image.png",
+    "variantImageUrl": "https://i.ibb.co/R9mG9XN/image.png",
+    "variantStats": "+15.2% CTR",
+    "abTestActive": true,
+    "createdAt": "2026-04-28T10:00:00Z"
+  },
+  {
+    "id": "initial-2",
+    "title": "Gaming Masterclass",
+    "description": "Bold visual hook with custom character rendering.",
+    "category": "Gaming",
+    "stats": "1.2M Views",
+    "imageUrl": "https://i.ibb.co/k0nZp7L/image.png",
+    "createdAt": "2026-04-28T09:00:00Z"
+  }
+]

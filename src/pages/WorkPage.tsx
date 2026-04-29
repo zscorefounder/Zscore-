@@ -38,22 +38,6 @@ import { ThumbnailGallery } from '../components/ThumbnailGallery';
 import { BehindTheScenes } from '../components/BehindTheScenes';
 import { PushPin } from '../components/PushPin';
 import { TableOfContents } from '../components/TableOfContents';
-import { 
-  db, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  serverTimestamp,
-  OperationType,
-  handleFirestoreError,
-  limit,
-  getDocsCached,
-  clearCache,
-  clearAllCache,
-  isQuotaExceededError
-} from '../firebase';
-import { deleteDoc, doc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { ConfirmModal } from '../components/ConfirmModal';
 
@@ -276,7 +260,6 @@ const HeroSection = () => {
   ];
 
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -317,27 +300,13 @@ const HeroSection = () => {
   React.useEffect(() => {
     const fetchHeroThumbnails = async () => {
       try {
-        setQuotaExceeded(false);
-        const q = query(
-          collection(db, 'hero_thumbnails'), 
-          orderBy('createdAt', 'desc'),
-          limit(10)
-        );
-        const data = await getDocsCached(q, 'hero_thumbnails_limit_10');
-        setThumbnails(data);
+        const resp = await fetch('/api/hero-thumbnails');
+        if (resp.ok) {
+          const data = await resp.json();
+          setThumbnails(data);
+        }
       } catch (error) {
-        if (isQuotaExceededError(error)) {
-          setQuotaExceeded(true);
-          return;
-        }
-        if (error instanceof Error) {
-          const msg = error.message.toLowerCase();
-          if (msg.includes('timed out') || msg.includes('network')) {
-            setQuotaExceeded(true);
-            return;
-          }
-        }
-        handleFirestoreError(error, OperationType.LIST, 'hero_thumbnails');
+        console.error("Hero fetch error", error);
       } finally {
         setIsInitialLoad(false);
       }
@@ -367,30 +336,25 @@ const HeroSection = () => {
           url: compressed,
           rotate: Math.random() * 30 - 15,
           x,
-          y,
-          createdAt: serverTimestamp()
+          y
         };
 
-        const docRef = await addDoc(collection(db, 'hero_thumbnails'), newDoc);
+        const resp = await fetch('/api/hero-thumbnails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newDoc)
+        });
         
-        // Update local state
-        setThumbnails(prev => [{
-          id: docRef.id,
-          ...newDoc,
-          createdAt: new Date()
-        }, ...prev]);
-        
-        // Clear cache
-        clearCache('hero');
-        clearCache('hero_thumbnails');
-        
-        toast.success('Hero thumbnail uploaded!', { id: toastId });
+        if (resp.ok) {
+          const savedItem = await resp.json();
+          setThumbnails(prev => [savedItem, ...prev]);
+          toast.success('Hero thumbnail uploaded!', { id: toastId });
+        }
         setIsUploading(false);
       };
       reader.readAsDataURL(file);
     } catch (error) {
       toast.error('Failed to upload thumbnail', { id: toastId });
-      handleFirestoreError(error, OperationType.CREATE, 'hero_thumbnails');
       setIsUploading(false);
     }
   };
@@ -404,18 +368,13 @@ const HeroSection = () => {
       onConfirm: async () => {
         const toastId = toast.loading('Deleting thumbnail...');
         try {
-          await deleteDoc(doc(db, 'hero_thumbnails', id));
-          
-          // Update local state
-          setThumbnails(prev => prev.filter(t => t.id !== id));
-          
-          // Clear cache
-          clearCache('hero_thumbnails_limit_10');
-          
-          toast.success('Thumbnail deleted', { id: toastId });
+          const resp = await fetch(`/api/hero-thumbnails/${id}`, { method: 'DELETE' });
+          if (resp.ok) {
+            setThumbnails(prev => prev.filter(t => t.id !== id));
+            toast.success('Thumbnail deleted', { id: toastId });
+          }
         } catch (error) {
           toast.error('Failed to delete thumbnail', { id: toastId });
-          handleFirestoreError(error, OperationType.DELETE, 'hero_thumbnails');
         }
       }
     });
@@ -461,34 +420,6 @@ const HeroSection = () => {
               <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </button>
 
-            {/* Quota Exceeded Overlay */}
-            <AnimatePresence>
-              {quotaExceeded && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-center gap-4 text-amber-800 max-w-2xl mx-auto"
-                >
-                  <div className="p-3 bg-amber-100 rounded-full">
-                    <Sparkles className="text-amber-600" size={24} />
-                  </div>
-                  <div className="flex-grow text-center md:text-left">
-                    <h4 className="font-bold text-lg">Daily Limit Reached</h4>
-                    <p className="text-sm opacity-90">
-                      Wow, Z-Score is popular today! We've reached our daily free database limit. 
-                      Some thumbnails might not load, but you can still browse the rest of the site.
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => setQuotaExceeded(false)}
-                    className="px-4 py-2 bg-amber-200 hover:bg-amber-300 rounded-xl text-sm font-bold transition-colors"
-                  >
-                    Dismiss
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             <ConfirmModal
               isOpen={confirmModal.isOpen}
               title={confirmModal.title}
@@ -517,51 +448,6 @@ const HeroSection = () => {
               {isUploading ? <ZSpinner size={14} /> : <Plus size={14} />}
               Add Hero Thumbnail
             </button>
-
-            {thumbnails.length === 0 && (
-              <button 
-                onClick={async () => {
-                  const toastId = toast.loading('Seeding hero thumbnails...');
-                  try {
-                    const samples = [
-                      { url: `https://picsum.photos/seed/${Math.random()}/1200/800` },
-                      { url: `https://picsum.photos/seed/${Math.random()}/1200/800` },
-                      { url: `https://picsum.photos/seed/${Math.random()}/1200/800` }
-                    ];
-                    
-                    for (const sample of samples) {
-                      await addDoc(collection(db, 'hero_thumbnails'), {
-                        ...sample,
-                        createdAt: serverTimestamp()
-                      });
-                    }
-                    
-                    clearCache('hero_thumbnails_limit_10');
-                    window.location.reload();
-                    toast.success('Hero thumbnails seeded!', { id: toastId });
-                  } catch (error) {
-                    toast.error('Failed to seed thumbnails', { id: toastId });
-                    handleFirestoreError(error, OperationType.CREATE, 'hero_thumbnails');
-                  }
-                }}
-                className="group flex items-center gap-2 px-6 py-3 bg-zinc-100 border border-black/5 rounded-full hover:bg-zinc-200 transition-all shadow-sm"
-              >
-                <Sparkles size={16} className="text-orange-500" />
-                <span className="text-xs font-bold uppercase tracking-widest">Seed Samples</span>
-              </button>
-            )}
-            
-            <button 
-              onClick={() => {
-                clearAllCache();
-                window.location.reload();
-              }}
-              className="group flex items-center gap-2 px-6 py-3 bg-zinc-100 border border-black/5 rounded-full hover:bg-zinc-200 transition-all shadow-sm"
-              title="Clear All Cache"
-            >
-              <Trash2 size={16} className="text-red-500" />
-              <span className="text-xs font-bold uppercase tracking-widest">Clear Cache</span>
-            </button>
           </div>
         )}
       </div>
@@ -585,19 +471,19 @@ const HeroSection = () => {
               return (
                 <motion.div
                   key={thumb.id}
-                  initial={{ opacity: 0, y: 100, scale: 0.8 }}
+                  initial={{ opacity: 0, y: 50, scale: 0.9 }}
                   animate={{ 
                     opacity: 1, 
                     scale: 1,
-                    x: x * 0.8, // Scale down X for better fit
-                    y: y * 0.15, // Flatten the curve
-                    rotate: angle * 0.3, // Subtle tilt based on position
+                    x: x * 0.8, 
+                    y: y * 0.15, 
+                    rotate: angle * 0.3,
                   }}
                   exit={{ opacity: 0, scale: 0.5 }}
                   transition={{
                     duration: 0.8,
                     delay: i * 0.05,
-                    ease: [0.16, 1, 0.3, 1]
+                    ease: "easeOut"
                   }}
                   style={{
                     position: 'absolute',
@@ -605,7 +491,7 @@ const HeroSection = () => {
                   }}
                   className="w-48 md:w-80 group"
                 >
-                  <div className="relative overflow-hidden rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-white/20 transform transition-all duration-700 hover:scale-110 hover:-translate-y-12 hover:z-50 hover:shadow-[0_40px_80px_rgba(0,0,0,0.25)]">
+                  <div className="relative overflow-hidden rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-black/5 transform transition-all duration-700 hover:scale-110 hover:-translate-y-12 hover:z-50 hover:shadow-[0_40px_80px_rgba(0,0,0,0.15)] bg-white p-2">
                     {isAdmin && (
                       <button
                         onClick={(e) => {
@@ -617,7 +503,7 @@ const HeroSection = () => {
                         <Trash2 size={14} />
                       </button>
                     )}
-                    <div className="aspect-video bg-zinc-100">
+                    <div className="aspect-video bg-zinc-100 rounded-[1.5rem] overflow-hidden">
                       <img 
                         src={thumb.imageUrl || thumb.image || thumb.url} 
                         alt="Hero Thumbnail" 
@@ -714,33 +600,16 @@ const HangingSection = () => {
     </div>
   );
 
-  // Fetch posts from Firestore
+  // Fetch posts from API
   const fetchRandomPosts = async () => {
     try {
-      setQuotaExceeded(false);
-      setError(null);
-      const q = query(
-        collection(db, 'random_posts'), 
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      const posts = await getDocsCached(q, 'random_posts_limit_10');
-      setCards(posts);
+      const resp = await fetch('/api/posts');
+      if (resp.ok) {
+        const data = await resp.json();
+        setCards(data);
+      }
     } catch (error) {
-      console.error("Error fetching random posts:", error);
-      if (isQuotaExceededError(error)) {
-        setQuotaExceeded(true);
-        return;
-      }
-      if (error instanceof Error) {
-        const msg = error.message.toLowerCase();
-        if (msg.includes('permission-denied')) {
-          setError("Permission denied.");
-        } else {
-          setError("Failed to load posts.");
-        }
-      }
-      handleFirestoreError(error, OperationType.GET, 'random_posts');
+      console.error("Posts fetch error", error);
     } finally {
       setIsInitialLoad(false);
     }
@@ -754,18 +623,13 @@ const HangingSection = () => {
     if (!window.confirm('Are you sure you want to delete this post?')) return;
     const toastId = toast.loading('Deleting post...');
     try {
-      await deleteDoc(doc(db, 'random_posts', id));
-      
-      // Update local state
-      setCards(prev => prev.filter(c => c.id !== id));
-      
-      // Clear cache
-      clearCache('random_posts_limit_10');
-      
-      toast.success('Post deleted', { id: toastId });
+      const resp = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+      if (resp.ok) {
+        setCards(prev => prev.filter(c => c.id !== id));
+        toast.success('Post deleted', { id: toastId });
+      }
     } catch (error) {
       toast.error('Failed to delete post', { id: toastId });
-      handleFirestoreError(error, OperationType.DELETE, 'random_posts');
     }
   };
 
@@ -792,20 +656,12 @@ const HangingSection = () => {
           model: "gemini-flash-latest",
           contents: {
             parts: [
-              { text: "Analyze this image and provide a short, catchy, high-conversion title (1-3 words) and a very brief, punchy description (under 10 words) suitable for a polaroid-style project card. The tone should be professional yet creative. Return in JSON format with 'title' and 'desc' keys." },
+              { text: "Analyze this image and provide a short, catchy, high-conversion title (1-3 words) and a very brief, punchy description (under 10 words). Return in JSON format with 'title' and 'desc' keys." },
               { inlineData: { data: base64Content, mimeType: file.type } }
             ]
           },
           config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                desc: { type: Type.STRING }
-              },
-              required: ["title", "desc"]
-            }
+            responseMimeType: "application/json"
           }
         });
 
@@ -813,31 +669,22 @@ const HangingSection = () => {
         
         const newCardData = {
           title: result.title,
-          desc: result.desc,
-          image: base64Data,
+          description: result.desc,
+          imageUrl: base64Data,
           rotate: Math.random() * 20 - 10,
-          y: Math.random() * 30,
-          createdAt: serverTimestamp()
+          y: Math.random() * 30
         };
 
-        try {
-          const docRef = await addDoc(collection(db, 'random_posts'), newCardData);
-          
-          // Update local state
-          setCards(prev => [{
-            id: docRef.id,
-            ...newCardData,
-            createdAt: new Date()
-          }, ...prev]);
-          
-          // Clear cache thoroughly
-          clearCache('random');
-          clearCache('random_posts');
-          
+        const resp = await fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newCardData)
+        });
+        
+        if (resp.ok) {
+          const saved = await resp.json();
+          setCards(prev => [saved, ...prev]);
           toast.success('Post added!', { id: toastId });
-        } catch (error) {
-          toast.error('Failed to save post', { id: toastId });
-          handleFirestoreError(error, OperationType.CREATE, 'random_posts');
         }
         
         setIsUploading(false);
@@ -872,34 +719,29 @@ const HangingSection = () => {
     try {
       const newCardData = {
         title: manualTitle,
-        desc: manualDesc,
-        image: manualImage,
+        description: manualDesc,
+        imageUrl: manualImage,
         rotate: Math.random() * 20 - 10,
-        y: Math.random() * 30,
-        createdAt: serverTimestamp()
+        y: Math.random() * 30
       };
 
-      const docRef = await addDoc(collection(db, 'random_posts'), newCardData);
+      const resp = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCardData)
+      });
       
-      // Update local state
-      setCards(prev => [{
-        id: docRef.id,
-        ...newCardData,
-        createdAt: new Date()
-      }, ...prev]);
-      
-      // Clear cache thoroughly
-      clearCache('random');
-      clearCache('random_posts');
-      
-      setManualTitle('');
-      setManualDesc('');
-      setManualImage(null);
-      setShowManualForm(false);
-      toast.success('Post added!', { id: toastId });
+      if (resp.ok) {
+        const saved = await resp.json();
+        setCards(prev => [saved, ...prev]);
+        setManualTitle('');
+        setManualDesc('');
+        setManualImage(null);
+        setShowManualForm(false);
+        toast.success('Post added!', { id: toastId });
+      }
     } catch (error) {
       toast.error('Failed to add post', { id: toastId });
-      handleFirestoreError(error, OperationType.CREATE, 'random_posts');
     } finally {
       setIsUploading(false);
     }
@@ -939,52 +781,6 @@ const HangingSection = () => {
           </h2>
           <p className="text-zinc-500 max-w-2xl mx-auto text-sm mb-2">A collection of visuals designed to break the pattern and drive engagement.</p>
 
-          {/* Quota Exceeded Overlay */}
-          <AnimatePresence>
-            {quotaExceeded && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-center gap-4 text-amber-800 max-w-2xl mx-auto"
-              >
-                <div className="p-3 bg-amber-100 rounded-full">
-                  <Sparkles className="text-amber-600" size={24} />
-                </div>
-                <div className="flex-grow text-center md:text-left">
-                  <h4 className="font-bold text-lg">Daily Limit Reached</h4>
-                  <p className="text-sm opacity-90">
-                    Wow, Z-Score is popular today! We've reached our daily free database limit. 
-                    Some thumbnails might not load, but you can still browse the rest of the site.
-                  </p>
-                </div>
-                <button 
-                  onClick={() => setQuotaExceeded(false)}
-                  className="px-4 py-2 bg-amber-200 hover:bg-amber-300 rounded-xl text-sm font-bold transition-colors"
-                >
-                  Dismiss
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Error State */}
-          {error && !isInitialLoad && (
-            <div className="bg-red-50 border border-red-100 rounded-3xl p-12 text-center mb-12 max-w-2xl mx-auto">
-              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <AlertCircle size={32} />
-              </div>
-              <h3 className="text-xl font-bold text-red-900 mb-2">{error}</h3>
-              <p className="text-red-600/70 mb-8 max-w-md mx-auto">There was an issue connecting to the database. Please check your connection or try again later.</p>
-              <button 
-                onClick={() => fetchRandomPosts()}
-                className="px-8 py-3 bg-red-600 text-white rounded-full font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-          
           {isAdmin && (
             <div className="flex flex-col items-center gap-4">
               <div className="flex justify-center gap-4">
@@ -1017,42 +813,6 @@ const HangingSection = () => {
                   <Plus size={16} className={showManualForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
                   <span className="text-xs font-bold uppercase tracking-widest">Manual Add</span>
                 </button>
-
-                {isAdmin && cards.length === 0 && (
-                  <button 
-                    onClick={async () => {
-                      const toastId = toast.loading('Seeding sample posts...');
-                      try {
-                        const samples = [
-                          { title: "I Spent 100 Days in a Secret Bunker", description: "A high-intensity gaming layout with custom typography.", imageUrl: "https://picsum.photos/seed/bunker/800/450" },
-                          { title: "The Crypto Crash: Why Everything is Falling", description: "Finance-focused design with clean data visualization.", imageUrl: "https://picsum.photos/seed/crypto/800/450" },
-                          { title: "AI is Replacing Designers (The Truth)", description: "Futuristic tech aesthetic with neon accents.", imageUrl: "https://picsum.photos/seed/ai/800/450" }
-                        ];
-                        
-                        for (const sample of samples) {
-                          const newCardData = {
-                            ...sample,
-                            rotate: Math.random() * 20 - 10,
-                            y: Math.random() * 30,
-                            createdAt: serverTimestamp()
-                          };
-                          await addDoc(collection(db, 'random_posts'), newCardData);
-                        }
-                        
-                        clearCache('random_posts_limit_10');
-                        fetchRandomPosts();
-                        toast.success('Sample posts seeded!', { id: toastId });
-                      } catch (error) {
-                        toast.error('Failed to seed posts', { id: toastId });
-                        handleFirestoreError(error, OperationType.CREATE, 'random_posts');
-                      }
-                    }}
-                    className="group flex items-center gap-2 px-6 py-3 bg-zinc-100 border border-black/5 rounded-full hover:bg-zinc-200 transition-all shadow-sm"
-                  >
-                    <Sparkles size={16} className="text-orange-500" />
-                    <span className="text-xs font-bold uppercase tracking-widest">Seed Samples</span>
-                  </button>
-                )}
               </div>
 
               <AnimatePresence>
@@ -1152,7 +912,7 @@ const HangingSection = () => {
                 return (
                   <motion.div
                     key={card.id}
-                    initial={{ opacity: 0, y: 100, scale: 0.8 }}
+                    initial={{ opacity: 0, scale: 0.8, y: 50 }}
                     animate={{ 
                       opacity: 1, 
                       scale: 1,
@@ -1161,7 +921,11 @@ const HangingSection = () => {
                       rotate: angle * 0.25,
                     }}
                     exit={{ opacity: 0, scale: 0.5 }}
-                    transition={{ delay: i * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ 
+                      delay: i * 0.08, 
+                      duration: 0.8, 
+                      ease: "easeOut" 
+                    }}
                     className="absolute group"
                     style={{ zIndex: 10 + i }}
                   >
@@ -1171,7 +935,7 @@ const HangingSection = () => {
                     </div>
 
                     {/* Polaroid Card */}
-                    <div className="bg-white p-3 pb-8 shadow-xl border border-black/5 w-40 md:w-48 transform transition-all duration-500 group-hover:scale-110 group-hover:-translate-y-12 group-hover:rotate-0 group-hover:z-50 group-hover:shadow-2xl">
+                    <div className="bg-white p-3 pb-8 shadow-xl border border-black/5 w-40 md:w-56 transform transition-all duration-500 group-hover:scale-110 group-hover:-translate-y-12 group-hover:rotate-0 group-hover:z-50 group-hover:shadow-2xl rounded-sm">
                       {isAdmin && (
                         <button
                           onClick={(e) => {
@@ -1183,7 +947,7 @@ const HangingSection = () => {
                           <Trash2 size={14} />
                         </button>
                       )}
-                      <div className="overflow-hidden bg-zinc-100 mb-3 aspect-video">
+                      <div className="overflow-hidden bg-zinc-100 mb-4 aspect-video shadow-inner">
                         <img 
                           src={card.imageUrl || card.image} 
                           alt={card.title}
@@ -1192,8 +956,8 @@ const HangingSection = () => {
                           referrerPolicy="no-referrer"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <h3 className="font-bold text-zinc-900 text-xs truncate">{card.title}</h3>
+                      <div className="space-y-2 px-1">
+                        <h3 className="font-black text-zinc-900 text-sm uppercase tracking-tight truncate leading-tight">{card.title}</h3>
                         <HangingDescription text={card.description || card.desc} />
                       </div>
                     </div>
@@ -1237,7 +1001,7 @@ const WorkPage = () => {
         </Link>
         <div className="flex items-center gap-4">
           <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Visual/Graphic Designer</span>
-          <img src="https://i.ibb.co/QjQxzsHp/Z-SCORE-LOGO.png" alt="Z Score Logo" className="h-6 w-auto brightness-0" referrerPolicy="no-referrer" loading="lazy" />
+          <img src="/regenerated_image_1777433995096.png" alt="Z Score Logo" className="h-6 w-auto" referrerPolicy="no-referrer" loading="lazy" />
         </div>
       </nav>
 

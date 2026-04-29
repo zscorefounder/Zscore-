@@ -7,7 +7,8 @@ interface ConfirmModalProps {
   title: string;
   message: string;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
+  onClose?: () => void;
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
@@ -19,10 +20,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   message,
   onConfirm,
   onCancel,
+  onClose,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   isDestructive = true,
 }) => {
+  const handleCancel = onClose || onCancel || (() => {});
   return (
     <AnimatePresence>
       {isOpen && (
@@ -31,7 +34,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onCancel}
+            onClick={handleCancel}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
           <motion.div
@@ -54,7 +57,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               
               <div className="flex gap-3">
                 <button
-                  onClick={onCancel}
+                  onClick={handleCancel}
                   className="flex-1 py-4 px-6 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all"
                 >
                   {cancelText}
@@ -62,7 +65,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 <button
                   onClick={() => {
                     onConfirm();
-                    onCancel();
+                    handleCancel();
                   }}
                   className={`flex-1 py-4 px-6 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all shadow-lg ${
                     isDestructive ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
@@ -74,7 +77,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             </div>
             
             <button
-              onClick={onCancel}
+              onClick={handleCancel}
               className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-zinc-600 transition-colors"
             >
               <X size={20} />
