@@ -286,7 +286,7 @@ export const BTSDetailModal = ({ content, onClose }: { content: BTSContent | nul
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center overflow-hidden border border-white/10">
                           <img 
-                            src={content.clientPhoto || "https://i.ibb.co/qXFY4XD/dposa-s.png"} 
+                            src={content.clientPhoto || "/regenerated_image_1777434200126.png"} 
                             alt="Client" 
                             className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"

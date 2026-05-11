@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && isEmailVerified() && request.auth.token.email.lower() == 'shansarkarbhai@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Collections ---
+
+    // Thumbnails
+    match /thumbnails/{thumbId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidThumbnail(incoming());
+      allow update: if isAdmin() && isValidThumbnail(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidThumbnail(data) {
+      return data.keys().hasAll(['title', 'imageUrl']) &&
+             data.title is string && data.title.size() <= 500 &&
+             data.imageUrl is string && data.imageUrl.size() <= 2000;
+    }
+
+    // BTS
+    match /bts/{btsId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidBTS(incoming());
+      allow update: if isAdmin() && isValidBTS(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidBTS(data) {
+      return data.keys().hasAll(['title', 'imageUrl']) &&
+             data.title is string && data.title.size() <= 500 &&
+             data.imageUrl is string && data.imageUrl.size() <= 2000;
+    }
+
+    // Comments
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isValidComment(incoming()); // Allow public comments
+      allow update, delete: if isAdmin();
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['name', 'content']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.content is string && data.content.size() <= 2000;
+    }
+
+    // Hero Thumbnails
+    match /hero_thumbnails/{heroId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Posts
+    match /posts/{postId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

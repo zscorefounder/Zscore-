@@ -314,7 +314,7 @@ const AboutPage = () => {
                 <Tape className="-top-4 left-1/2 -translate-x-1/2" rotation={2} />
                 <div className="w-64 h-80 bg-zinc-200 overflow-hidden">
                   <img 
-                    src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
+                    src="/regenerated_image_1777434200126.png" 
                     alt="Profile" 
                     className="w-full h-full object-cover hover:grayscale-0 transition-all duration-700" 
                     referrerPolicy="no-referrer"

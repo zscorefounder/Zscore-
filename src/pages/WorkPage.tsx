@@ -1040,7 +1040,7 @@ const WorkPage = () => {
             className="md:col-span-5 relative rounded-[2.5rem] bg-zinc-200 overflow-hidden min-h-[400px] group shadow-xl shadow-black/5"
           >
             <motion.img 
-              src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
+              src="/regenerated_image_1777434200126.png" 
               alt="Profile" 
               className="absolute inset-0 w-full h-full object-cover transition-all duration-1000 group-hover:scale-110"
               referrerPolicy="no-referrer"

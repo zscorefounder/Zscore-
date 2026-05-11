@@ -4,9 +4,11 @@ interface AdminContextType {
   isAdmin: boolean;
   user: any | null;
   loading: boolean;
-  login: (email: string) => boolean;
-  logout: () => void;
+  login: (email: string) => Promise<boolean>;
+  logout: () => Promise<void>;
 }
+
+const ADMIN_EMAIL = 'shansarkarbhai@gmail.com';
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
@@ -16,24 +18,25 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for an admin flag
-    const storedAdmin = localStorage.getItem('z_score_is_admin') === 'true';
-    const storedUser = localStorage.getItem('z_score_admin_user');
-    
-    if (storedAdmin && storedUser) {
-      setIsAdmin(true);
-      setUser(JSON.parse(storedUser));
+    const storedAdmin = localStorage.getItem('z_score_admin_session');
+    if (storedAdmin) {
+      const userData = JSON.parse(storedAdmin);
+      if (userData.email.toLowerCase() === ADMIN_EMAIL) {
+        setIsAdmin(true);
+        setUser(userData);
+      }
     }
-    
     setLoading(false);
   }, []);
 
-  const login = (email: string) => {
-    // Hardcoded admin email - handle case sensitivity
-    if (email.toLowerCase().trim() === 'shansarkarbhai@gmail.com') {
-      const adminUser = { email: email.toLowerCase().trim(), name: 'Zeeshan' };
-      localStorage.setItem('z_score_is_admin', 'true');
-      localStorage.setItem('z_score_admin_user', JSON.stringify(adminUser));
+  const login = async (email: string) => {
+    if (email.toLowerCase().trim() === ADMIN_EMAIL) {
+      const adminUser = { 
+        email: email.toLowerCase().trim(), 
+        name: 'Admin',
+        photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
+      };
+      localStorage.setItem('z_score_admin_session', JSON.stringify(adminUser));
       setIsAdmin(true);
       setUser(adminUser);
       return true;
@@ -41,9 +44,8 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
 
-  const logout = () => {
-    localStorage.removeItem('z_score_is_admin');
-    localStorage.removeItem('z_score_admin_user');
+  const logout = async () => {
+    localStorage.removeItem('z_score_admin_session');
     setIsAdmin(false);
     setUser(null);
   };

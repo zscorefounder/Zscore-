@@ -83,7 +83,31 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
   const [isCopied, setIsCopied] = useState(false);
   const [showVariant, setShowVariant] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
-  const pinColors = ["#FF6321", "#3B82F6", "#8B5CF6", "#10B981"];
+
+  // 3D Tilt Logic
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const mouseXSpring = useSpring(x);
+  const mouseYSpring = useSpring(y);
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["7deg", "-7deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-7deg", "7deg"]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const xPct = mouseX / width - 0.5;
+    const yPct = mouseY / height - 0.5;
+    x.set(xPct);
+    y.set(yPct);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
 
   const hasVariant = !!thumb.variantImageUrl;
 
@@ -108,33 +132,23 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
-      animate={{ 
-        opacity: 1, 
-        y: 0
-      }}
-      whileHover={{ 
-        y: -10,
-        transition: { duration: 0.3, ease: "easeOut" }
-      }}
+      animate={{ opacity: 1, y: 0 }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
       transition={{ 
         delay: (i % 6) * 0.05, 
         duration: 0.6, 
         ease: "easeOut"
       }}
-      className="relative p-4 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.04)] hover:shadow-[0_40px_80px_rgba(0,102,255,0.1)] rounded-[2.5rem] w-full mx-auto group transition-all duration-500 cursor-default border border-zinc-100 hover:border-blue-500/30"
+      className="relative p-5 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.04)] hover:shadow-[0_50px_100px_rgba(0,102,255,0.08)] rounded-[2.8rem] w-full mx-auto group transition-all duration-500 cursor-default border border-zinc-100 hover:border-blue-500/20"
     >
-      <div className="space-y-4">
+      <div className="space-y-5" style={{ transform: "translateZ(30px)" }}>
         {/* Clean Thumbnail Container */}
-        <div className="aspect-video overflow-hidden relative bg-zinc-900 rounded-[1.8rem] border border-black/5 transition-all duration-500 shadow-sm">
+        <div className="aspect-video overflow-hidden relative bg-zinc-900 rounded-[2rem] border border-black/5 transition-all duration-700 shadow-xl group-hover:shadow-blue-500/20">
           {!isLoaded && !hasError && (
             <div className="absolute inset-0 bg-zinc-800 animate-pulse flex items-center justify-center">
               <ImageIcon className="text-zinc-700" size={32} />
-            </div>
-          )}
-          {hasError && (
-            <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center p-4 text-center">
-              <ImageIcon className="text-zinc-800 mb-2" size={24} />
-              <p className="text-[8px] font-bold uppercase tracking-widest text-zinc-600">Image failed to load</p>
             </div>
           )}
           
@@ -144,119 +158,98 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
               key={showVariant ? (thumb.variantImageUrl || thumb.id) : (thumb.id || thumb.imageUrl)}
               src={showVariant ? thumb.variantImageUrl : thumb.imageUrl} 
               alt={thumb.title} 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: isLoaded ? 1 : 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
+              initial={{ opacity: 0, scale: 1.1 }}
+              animate={{ opacity: isLoaded ? 1 : 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.6 }}
               onLoad={() => setIsLoaded(true)}
               onError={() => {
                 setHasError(true);
                 setIsLoaded(true);
               }}
-              className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105"
+              className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110"
               referrerPolicy="no-referrer"
               loading={i < 4 ? "eager" : "lazy"}
             />
           </AnimatePresence>
+
+          {/* Hover Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-6">
+             <div className="flex items-center gap-2 text-white">
+                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-lg">
+                   <ChevronRight size={16} />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">View Analysis</span>
+             </div>
+          </div>
+
+          {/* Interactive Badge */}
+          <div className="absolute top-4 right-4 z-10">
+             <div className="px-3 py-1.5 bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-white/20 flex items-center gap-2 transform group-hover:scale-110 transition-transform duration-300">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black text-black tracking-tighter">
+                  {thumb.stats || "9.4% CTR"}
+                </span>
+             </div>
+          </div>
         </div>
 
         {/* Content & Metadata Below Image */}
         <div className="space-y-4 px-2 pb-2">
           {/* Top Metadata Row */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-1 bg-blue-50 text-blue-600 text-[8px] font-black tracking-widest rounded-md uppercase border border-blue-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-zinc-100 text-zinc-900 text-[9px] font-bold tracking-[0.1em] rounded-full uppercase border border-zinc-200">
                 {thumb.category || 'Portfolio'}
               </span>
-              {thumb.stats && (
-                <span className="px-2 py-1 bg-zinc-50 text-zinc-600 text-[8px] font-black tracking-widest rounded-md uppercase border border-zinc-100">
-                  {thumb.stats}
-                </span>
-              )}
-              <span className="px-2 py-1 bg-green-50 text-green-600 text-[8px] font-black tracking-widest rounded-md uppercase border border-green-100 flex items-center gap-1">
-                <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />
-                Live
-              </span>
+              <span className="text-[10px] font-medium text-zinc-400">• New Project</span>
             </div>
 
-            {/* Quick Actions (Admin or General) */}
-            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <button 
-                onClick={handleCopy}
-                className="p-2 bg-zinc-100 text-zinc-500 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
-                title="Copy Link"
-              >
-                {isCopied ? <Check size={12} strokeWidth={3} /> : <Copy size={12} strokeWidth={3} />}
-              </button>
-            </div>
+            <button 
+              onClick={handleCopy}
+              className="p-2.5 bg-zinc-50 text-zinc-400 rounded-xl hover:bg-zinc-900 hover:text-white transition-all transform hover:rotate-12"
+            >
+              {isCopied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
           </div>
 
-          {/* Title & Description */}
-          <div className="space-y-1">
-            <h4 className="text-xl font-black text-zinc-900 group-hover:text-blue-600 transition-colors tracking-tight uppercase">
+          <div className="space-y-2">
+            <h4 className="text-2xl font-black text-zinc-900 leading-none group-hover:text-blue-600 transition-colors uppercase tracking-tight">
               {thumb.title}
             </h4>
             {thumb.description && (
-              <p className="text-xs text-zinc-500 leading-relaxed font-medium line-clamp-2">
+              <p className="text-[13px] text-zinc-500 leading-relaxed font-medium line-clamp-2">
                 {thumb.description}
               </p>
             )}
           </div>
 
-          {/* Admin Controls Area */}
           {isAdmin && (
-            <div className="pt-4 border-t border-zinc-100 flex items-center justify-between gap-3">
-              <div className="flex gap-2">
-                <button 
+            <div className="pt-4 border-t border-zinc-100 flex items-center gap-2">
+               <button 
                   onClick={(e) => {
                     e.stopPropagation();
                     handleRefine(thumb.id, thumb.imageUrl);
                   }}
-                  disabled={refiningId === thumb.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/10 disabled:opacity-50 group/refine"
-                >
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
+               >
                   {refiningId === thumb.id ? <ZSpinner size={12} /> : <Sparkles size={12} />}
-                  <span className="text-[10px] font-bold uppercase tracking-widest">AI Refine</span>
-                </button>
-                <button 
+                  Refine
+               </button>
+               <button 
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDelete(thumb.id);
                   }}
-                  className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                  title="Delete"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-
-              {hasVariant && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowVariant(!showVariant);
-                  }}
-                  className={`px-3 py-2 ${showVariant ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'} rounded-xl text-[9px] font-black uppercase tracking-widest transition-all`}
-                >
-                  {showVariant ? 'Show Original' : 'Show Variant B'}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* A/B Test Status (Non-Admin View) */}
-          {!isAdmin && hasVariant && (
-            <div className="flex items-center gap-2 pt-2">
-              <div className="p-1.5 bg-indigo-50 rounded-lg">
-                <RefreshCw size={12} className="text-indigo-600" />
-              </div>
-              <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider">A/B Testing Variant Live</p>
+                  className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
+               >
+                  <Trash2 size={16} />
+               </button>
             </div>
           )}
         </div>
       </div>
     </motion.div>
-
   );
 };
 
@@ -688,7 +681,19 @@ export const ThumbnailGallery = () => {
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3, 4, 5, 6].map(n => <ZSkeleton key={n} className="aspect-video rounded-3xl" />)}
+            {[1, 2, 3, 4, 5, 6].map(n => (
+              <div key={n} className="p-4 bg-white shadow-sm rounded-[2.5rem] border border-zinc-100 space-y-4">
+                <ZSkeleton className="aspect-video rounded-[1.8rem]" />
+                <div className="space-y-4 px-2">
+                  <div className="flex gap-2">
+                    <ZSkeleton className="h-4 w-16" />
+                    <ZSkeleton className="h-4 w-12" />
+                  </div>
+                  <ZSkeleton className="h-8 w-full" />
+                  <ZSkeleton className="h-4 w-5/6" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredThumbnails.length === 0 ? (
           <div className="text-center py-20 bg-zinc-50 rounded-3xl border border-dashed border-zinc-200">

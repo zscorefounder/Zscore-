@@ -30,6 +30,7 @@ import {
   Layers,
   Phone,
   ChevronDown,
+  ChevronRight,
   Bot,
   Loader2,
   Hand,
@@ -65,7 +66,7 @@ import { BTSDetailModal } from './components/BTSDetailModal';
 import { WaterBackground } from './components/WaterBackground';
 import { FogEffect } from './components/FogEffect';
 import { PushPin } from './components/PushPin';
-import { ZSpinner, ZPageLoader } from './components/ZLoading';
+import { ZSpinner, ZPageLoader, ZSkeleton } from './components/ZLoading';
 import { useAdmin } from './hooks/useAdmin';
 import { Toaster, toast } from 'sonner';
 
@@ -212,7 +213,7 @@ const ProfileImage = () => {
         <motion.img 
           animate={{ y: [0, -10, 0] }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
+          src="/regenerated_image_1777434200126.png" 
           alt="Zeeshan" 
           className="w-full h-auto hover:grayscale-0 transition-all duration-700 rounded-3xl"
           referrerPolicy="no-referrer"
@@ -734,7 +735,7 @@ const PROJECTS: Project[] = [
   { id: 1, title: "I Spent 100 Days in a Secret Bunker", category: "Gaming", image: "https://i.ibb.co/5Xd8rDDZ/image.png", stats: "14.2% CTR" },
   { id: 2, title: "The Crypto Crash: Why Everything is Falling", category: "Finance", image: "https://i.ibb.co/V0nZTDcZ/image.png", stats: "12.8% CTR" },
   { id: 3, title: "AI is Replacing Designers (The Truth)", category: "Tech", image: "https://i.ibb.co/rKFrLL2S/image.png", stats: "10.5% CTR" },
-  { id: 4, title: "Visual Storytelling Masterclass", category: "Portfolio", image: "https://i.ibb.co/qXFY4XD/dposa-s.png", stats: "Elite Design" },
+  { id: 4, title: "Visual Storytelling Masterclass", category: "Portfolio", image: "/regenerated_image_1777434200126.png", stats: "Elite Design" },
   { id: 5, title: "Modern Brand Identity", category: "Business", image: "/regenerated_image_1777433995096.png", stats: "Top Tier" },
   { id: 6, title: "Travel Hook: Alpine Adventure", category: "Travel", image: "https://i.ibb.co/rR6LmpRm/image.png", stats: "15% Growth" },
 ];
@@ -1013,20 +1014,31 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
   const location = useLocation();
   const isHome = location.pathname === '/';
   const { isAdmin, user, login, logout } = useAdmin();
+  const [cloudStatus, setCloudStatus] = useState<any>(null);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (login(loginEmail)) {
-      toast.success("Logged in as Admin!");
+  useEffect(() => {
+    if (isAdmin) {
+      fetch('/api/admin/cloudinary-check')
+        .then(res => res.json())
+        .then(data => setCloudStatus(data))
+        .catch(err => console.error("Failed to check Cloudinary:", err));
+    }
+  }, [isAdmin]);
+
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const success = await login(loginEmail);
+    if (success) {
+      toast.success("Successfully logged in!");
       setShowLoginModal(false);
       setLoginEmail('');
     } else {
-      toast.error("Invalid Admin Email.");
+      toast.error("Access denied. Please use the authorized admin account.");
     }
   };
 
   const handleLogout = async () => {
-    logout();
+    await logout();
     toast.success("Logged out successfully!");
   };
 
@@ -1116,7 +1128,15 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
           {user ? (
             <div className="flex items-center gap-3">
               {isAdmin && (
-                <span className="hidden sm:inline-block px-2 py-1 bg-blue-600 text-white text-[8px] font-bold uppercase tracking-widest rounded-md">Admin</span>
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline-block px-2 py-1 bg-blue-600 text-white text-[8px] font-bold uppercase tracking-widest rounded-md">Admin</span>
+                  {cloudStatus && (
+                    <div 
+                      className={`w-2 h-2 rounded-full ${cloudStatus.cloudName && cloudStatus.apiKey && cloudStatus.apiSecret ? 'bg-green-500' : 'bg-amber-500'}`} 
+                      title={cloudStatus.cloudName && cloudStatus.apiKey && cloudStatus.apiSecret ? 'Cloudinary Connected' : 'Cloudinary Config Missing'}
+                    />
+                  )}
+                </div>
               )}
               <button 
                 onClick={handleLogout}
@@ -1189,7 +1209,7 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
                 <p className="text-zinc-500 text-sm mt-2">Enter your authorized email to continue.</p>
               </div>
 
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-4 mb-2 block">Email Address</label>
                   <input 
@@ -1198,7 +1218,7 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="name@example.com"
                     autoFocus
-                    className="w-full bg-zinc-50 border border-black/5 p-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/10 font-bold text-sm transition-all"
+                    className="w-full bg-zinc-50 border border-black/5 p-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/10 font-bold text-sm transition-all text-zinc-900"
                   />
                 </div>
                 <button 
@@ -1207,6 +1227,7 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
                 >
                   Verify Access
                 </button>
+                <p className="text-[10px] text-zinc-400 text-center uppercase tracking-widest font-bold">Authorized Admins Only</p>
               </form>
             </motion.div>
           </div>
@@ -1400,15 +1421,49 @@ const FeaturedCaseStudies = () => {
     fetchStudies();
   }, []);
 
-  if (isLoading || studies.length === 0) return null;
+  if (isLoading) {
+    return (
+      <section className="py-24 bg-zinc-50 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-end justify-between mb-16 gap-6">
+            <div className="space-y-4">
+              <ZSkeleton className="h-4 w-24" />
+              <ZSkeleton className="h-12 w-64 md:w-96" />
+            </div>
+            <ZSkeleton className="h-12 w-48 rounded-full" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="bg-white rounded-3xl p-4 border border-black/5 shadow-xl space-y-6">
+                <ZSkeleton className="aspect-video rounded-2xl" />
+                <div className="space-y-3 px-2">
+                  <ZSkeleton className="h-6 w-3/4" />
+                  <ZSkeleton className="h-4 w-full" />
+                  <ZSkeleton className="h-4 w-5/6" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (studies.length === 0) return null;
 
   return (
     <section className="py-24 bg-zinc-50 relative overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6">
+      {/* Section Accents */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+        <div className="absolute top-[20%] -left-[10%] w-[30%] aspect-square bg-blue-600/5 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[20%] -right-[10%] w-[40%] aspect-square bg-purple-600/5 blur-[120px] rounded-full" />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
         <div className="flex flex-col md:flex-row items-end justify-between mb-16 gap-6">
           <div className="space-y-4">
             <div className="flex items-center gap-4">
-              <h3 className="text-blue-600 font-bold uppercase tracking-[0.3em] text-xs">Deep Dives</h3>
+              <h3 className="text-blue-600 font-bold uppercase tracking-[0.4em] text-xs">Deep Dives</h3>
               {studies.length > 0 && studies[0].isFallback && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse">
                   <AlertCircle size={10} />
@@ -1416,58 +1471,60 @@ const FeaturedCaseStudies = () => {
                 </div>
               )}
             </div>
-            <h2 className="text-4xl md:text-6xl font-display font-black text-[#1A1A1A]">
+            <h2 className="text-5xl md:text-7xl font-display font-black text-[#1A1A1A] tracking-tighter">
               PROCESS & <br /><span className="text-blue-600">STRATEGY.</span>
             </h2>
           </div>
           <Link 
             to="/work" 
-            className="group flex items-center gap-3 px-6 py-3 bg-white border border-black/5 rounded-full hover:bg-black hover:text-white transition-all text-xs font-bold uppercase tracking-widest shadow-sm"
+            className="group flex items-center gap-4 px-8 py-4 bg-white border border-black/5 rounded-full hover:bg-zinc-900 hover:text-white transition-all text-[10px] font-bold uppercase tracking-[0.2em] shadow-xl hover:shadow-blue-500/10"
           >
             Read Case Studies
-            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            <ArrowRight size={14} className="group-hover:translate-x-2 transition-transform" />
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
           {studies.map((study, i) => (
             <motion.div
               key={study.id}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -10 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
+              transition={{ delay: i * 0.1, duration: 0.6 }}
               onClick={() => setSelectedStudy(study)}
-              className="group bg-white rounded-3xl p-4 border border-black/5 hover:border-blue-600/20 transition-all duration-500 shadow-xl hover:shadow-2xl cursor-pointer"
+              className="group bg-white rounded-[2.5rem] p-5 border border-black/5 hover:border-blue-600/30 transition-all duration-500 shadow-2xl hover:shadow-3xl cursor-pointer"
             >
-              <div className="aspect-video rounded-2xl overflow-hidden mb-6 relative">
+              <div className="aspect-[4/3] rounded-[1.8rem] overflow-hidden mb-6 relative shadow-inner">
                 <img 
                   src={study.imageUrl} 
                   alt={study.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute top-4 left-4">
-                  <span className="px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full uppercase tracking-widest shadow-lg">
+                  <span className="px-4 py-1.5 bg-blue-600 text-white text-[9px] font-black rounded-full uppercase tracking-widest shadow-xl">
                     {study.category || 'Case Study'}
                   </span>
                 </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               </div>
               <div className="space-y-3 px-2">
-                <h4 className="text-xl font-bold text-[#1A1A1A] group-hover:text-blue-600 transition-colors line-clamp-1">
+                <h4 className="text-2xl font-black text-[#1A1A1A] group-hover:text-blue-600 transition-colors line-clamp-1 uppercase tracking-tight">
                   {study.title}
                 </h4>
-                <p className="text-sm text-zinc-500 font-medium line-clamp-2 leading-relaxed">
+                <p className="text-sm text-zinc-500 font-medium line-clamp-2 leading-relaxed h-10">
                   {study.description}
                 </p>
-                <div className="pt-4 flex items-center justify-between border-t border-black/5">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{study.clientName || 'Private Client'}</span>
-                  <div className="flex items-center gap-2 text-blue-600">
-                    <span className="text-[10px] font-black uppercase tracking-tighter">View Process</span>
-                    <ArrowRight size={10} />
-                  </div>
+                <div className="pt-4 flex items-center justify-between">
+                   <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map(star => <Star key={star} size={10} fill="#3b82f6" stroke="none" />)}
+                   </div>
+                   <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600">
+                      EXPLORE <ChevronRight size={12} />
+                   </div>
                 </div>
-                {i === 0 && <CardTestimonialCarousel />}
               </div>
             </motion.div>
           ))}
@@ -1528,7 +1585,23 @@ const FeaturedWork = () => {
           </Link>
         </div>
 
-        {thumbnails.length === 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+            {[1, 2, 3].map(n => (
+              <div key={n} className="p-4 bg-white shadow-sm rounded-[2.5rem] border border-zinc-100 space-y-4">
+                <ZSkeleton className="aspect-video rounded-[1.8rem]" />
+                <div className="space-y-4 px-2">
+                  <div className="flex gap-2">
+                    <ZSkeleton className="h-4 w-16" />
+                    <ZSkeleton className="h-4 w-12" />
+                  </div>
+                  <ZSkeleton className="h-8 w-full" />
+                  <ZSkeleton className="h-4 w-5/6" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : thumbnails.length === 0 ? (
           <div className="py-20 text-center border-2 border-dashed border-black/5 rounded-3xl">
             <p className="text-zinc-400 font-medium">No live thumbnails found yet. Start uploading in the Work page!</p>
           </div>
@@ -1552,9 +1625,52 @@ const FeaturedWork = () => {
   );
 };
 
+const Fish = ({ mouseX, mouseY, rotation, delay = 0, size = 160, opacity = 0.3, offset = { x: -75, y: -75 } }: any) => {
+  const x = useTransform(mouseX, (v: number) => v + offset.x);
+  const y = useTransform(mouseY, (v: number) => v + offset.y);
+
+  return (
+    <motion.div
+      className="absolute pointer-events-none select-none"
+      style={{ 
+        width: size, 
+        height: size, 
+        opacity,
+        x,
+        y,
+        rotate: rotation
+      }}
+    >
+      <div className="relative w-full h-full">
+        {/* Main Fish Body */}
+        <motion.img 
+          src="https://i.ibb.co/68v8sXf/koi-3d.png" 
+          alt="3D Fish"
+          className="w-full h-full object-contain filter blur-[1px] contrast-125 saturate-150"
+          animate={{
+            scale: [1, 1.05, 1],
+            rotateY: [0, 10, 0],
+          }}
+          transition={{
+            duration: 3,
+            delay,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1524160223099-31c30800b462?auto=format&fit=crop&q=80&w=200";
+          }}
+          referrerPolicy="no-referrer"
+        />
+        {/* Shadow/Depth Effect */}
+        <div className="absolute inset-0 bg-blue-500/10 blur-[40px] -z-10 rounded-full" />
+      </div>
+    </motion.div>
+  );
+};
+
 const FishBackground = () => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const fishRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1564,63 +1680,59 @@ const FishBackground = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Use smoother spring movement for the fish
-  const springConfig = { damping: 25, stiffness: 120 };
-  const mouseX = useSpring(mousePos.x, springConfig);
-  const mouseY = useSpring(mousePos.y, springConfig);
+  const springConfig1 = { damping: 25, stiffness: 120 };
+  const springConfig2 = { damping: 35, stiffness: 80 }; // Slower fish
+  const springConfig3 = { damping: 45, stiffness: 50 }; // Freest fish
 
-  // Rotation based on movement direction
-  const [rotation, setRotation] = useState(0);
-  const prevPos = useRef({ x: 0, y: 0 });
+  const mouseX1 = useSpring(mousePos.x, springConfig1);
+  const mouseY1 = useSpring(mousePos.y, springConfig1);
+  
+  const mouseX2 = useSpring(mousePos.x, springConfig2);
+  const mouseY2 = useSpring(mousePos.y, springConfig2);
+
+  const mouseX3 = useSpring(mousePos.x, springConfig3);
+  const mouseY3 = useSpring(mousePos.y, springConfig3);
+
+  const [rotation1, setRotation1] = useState(0);
+  const [rotation2, setRotation2] = useState(0);
+  const [rotation3, setRotation3] = useState(0);
+
+  const prevPos1 = useRef({ x: 0, y: 0 });
+  const prevPos2 = useRef({ x: 0, y: 0 });
+  const prevPos3 = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    const dx = mousePos.x - prevPos.current.x;
-    const dy = mousePos.y - prevPos.current.y;
+    const dx = mousePos.x - prevPos1.current.x;
+    const dy = mousePos.y - prevPos1.current.y;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-      setRotation(angle + 90); // Adjusting base rotation
+      setRotation1(Math.atan2(dy, dx) * (180 / Math.PI) + 90);
     }
-    prevPos.current = mousePos;
+    prevPos1.current = mousePos;
   }, [mousePos]);
 
-  const x = useTransform(mouseX, (v) => v - 75);
-  const y = useTransform(mouseY, (v) => v - 75);
+  useEffect(() => {
+    const dx = mouseX2.get() - prevPos2.current.x;
+    const dy = mouseY2.get() - prevPos2.current.y;
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+      setRotation2(Math.atan2(dy, dx) * (180 / Math.PI) + 90);
+    }
+    prevPos2.current = { x: mouseX2.get(), y: mouseY2.get() };
+  }, [mousePos, mouseX2, mouseY2]);
+
+  useEffect(() => {
+    const dx = mouseX3.get() - prevPos3.current.x;
+    const dy = mouseY3.get() - prevPos3.current.y;
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+      setRotation3(Math.atan2(dy, dx) * (180 / Math.PI) + 90);
+    }
+    prevPos3.current = { x: mouseX3.get(), y: mouseY3.get() };
+  }, [mousePos, mouseX3, mouseY3]);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-      <motion.div
-        style={{
-          x,
-          y,
-          rotate: rotation,
-        }}
-        className="absolute w-40 h-40 opacity-30 select-none"
-      >
-        <div className="relative w-full h-full">
-          {/* Main Fish Body */}
-          <motion.img 
-            src="https://i.ibb.co/68v8sXf/koi-3d.png" 
-            alt="3D Fish"
-            className="w-full h-full object-contain filter blur-[1px] contrast-125 saturate-150"
-            animate={{
-              scale: [1, 1.05, 1],
-              rotateY: [0, 10, 0],
-            }}
-            transition={{
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            onError={(e) => {
-              // Fallback if image fails to load
-              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1524160223099-31c30800b462?auto=format&fit=crop&q=80&w=200";
-            }}
-            referrerPolicy="no-referrer"
-          />
-          {/* Shadow/Depth Effect */}
-          <div className="absolute inset-0 bg-blue-500/10 blur-[40px] -z-10 rounded-full" />
-        </div>
-      </motion.div>
+      <Fish mouseX={mouseX1} mouseY={mouseY1} rotation={rotation1} size={150} opacity={0.25} offset={{ x: -75, y: -75 }} />
+      <Fish mouseX={mouseX2} mouseY={mouseY2} rotation={rotation2} size={100} opacity={0.15} offset={{ x: 50, y: 50 }} delay={1} />
+      <Fish mouseX={mouseX3} mouseY={mouseY3} rotation={rotation3} size={120} opacity={0.1} offset={{ x: -100, y: 100 }} delay={2} />
     </div>
   );
 };
@@ -1660,17 +1772,54 @@ const Hero = () => {
           transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
           className="text-7xl md:text-[10rem] font-display font-bold tracking-tighter mb-8 leading-[0.85] text-[#1A1A1A] relative"
         >
-          {/* Simplified Decorations */}
-      <motion.div 
-        style={{ opacity }}
-        className="absolute inset-0 pointer-events-none"
-      >
-        <div className="absolute top-0 right-[15%] w-64 h-64 bg-blue-600/5 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-0 left-[15%] w-64 h-64 bg-purple-600/5 blur-[120px] rounded-full animate-pulse delay-1000" />
-      </motion.div>
+          <ScrapbookDecorations scrollY={scrollY} />
           <TypewriterText text="STOP THE" speed={100} /> <br />
-          <span className="text-blue-600 italic">
-            <TypewriterText text="SCROLL." speed={150} />
+          <span className="relative inline-block">
+            <span className="text-blue-600 italic">
+              <TypewriterText text="SCROLL." speed={150} />
+            </span>
+            {/* Hand-drawn marker circle effects */}
+            <motion.svg
+              viewBox="0 0 400 200"
+              className="absolute -inset-x-12 -inset-y-8 w-[calc(100%+6rem)] h-[calc(100%+4rem)] pointer-events-none"
+              preserveAspectRatio="none"
+              style={{ filter: "drop-shadow(2px 4px 6px rgba(239, 68, 68, 0.15))" }}
+            >
+              {/* Stroke 1: Bold base */}
+              <motion.path
+                d="M 20 100 C 20 40, 385 40, 385 100 C 385 160, 15 160, 45 110"
+                fill="none"
+                stroke="#ef4444"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray="2 4"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 0.7 }}
+                transition={{ duration: 1.2, delay: 2.2, ease: "easeInOut" }}
+              />
+              {/* Stroke 2: Thinner imperfection */}
+              <motion.path
+                d="M 25 105 C 25 35, 375 35, 375 105 C 375 175, 25 175, 40 115"
+                fill="none"
+                stroke="#ef4444"
+                strokeWidth="2"
+                strokeLinecap="round"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 0.5 }}
+                transition={{ duration: 1.5, delay: 2.4, ease: "easeInOut" }}
+              />
+              {/* Stroke 3: Light accent */}
+              <motion.path
+                d="M 15 95 C 15 45, 390 45, 390 95 C 390 145, 10 145, 30 105"
+                fill="none"
+                stroke="#f87171"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 0.4 }}
+                transition={{ duration: 1.8, delay: 2.6, ease: "easeInOut" }}
+              />
+            </motion.svg>
           </span>
         </motion.h1>
         
@@ -1707,6 +1856,11 @@ const Hero = () => {
             className="px-8 py-4 bg-transparent text-zinc-900 font-bold rounded-full hover:bg-black/5 transition-all border border-black/10"
           >
             View Pricing
+          </button>
+          <button 
+            className="px-8 py-4 bg-blue-600 text-white font-bold rounded-full hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 border border-blue-500/20"
+          >
+            Free CTR Audit
           </button>
         </motion.div>
       </motion.div>
@@ -2025,9 +2179,12 @@ const WhyMe = () => (
         {/* Dynamic Background Elements */}
         <div className="absolute -inset-10 bg-blue-50/30 blur-[100px] rounded-full -z-10" />
         
-        <div className="relative w-full rounded-[2.5rem] overflow-hidden border-8 border-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] z-10 group cursor-none">
+        <div 
+          className="relative w-full rounded-[2.5rem] overflow-hidden border-8 border-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] z-10 group cursor-none"
+          style={{ backgroundImage: 'url(/regenerated_image_1777435400148.png)', backgroundSize: 'cover' }}
+        >
           <img 
-            src="https://i.ibb.co/qXFY4XD/dposa-s.png" 
+            src="/regenerated_image_1777435409350.png" 
             alt="Zeeshan Profile" 
             className="w-full h-auto grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000 ease-out"
             referrerPolicy="no-referrer"
@@ -2849,7 +3006,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                <img src="/regenerated_image_1777434200126.png" alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Palette size={16} className="text-blue-600" />
@@ -2897,7 +3054,7 @@ const SocialLive = () => {
           <div className="p-8 flex flex-col items-center text-center space-y-8">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-white p-[3px] shadow-inner border border-black/5 flex items-center justify-center overflow-hidden">
-                <img src="https://i.ibb.co/qXFY4XD/dposa-s.png" alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                <img src="/regenerated_image_1777434200126.png" alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1.5 shadow-lg border border-black/5">
                 <Twitter size={16} className="text-black" />
