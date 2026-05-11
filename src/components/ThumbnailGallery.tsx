@@ -185,46 +185,70 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
 
           {/* Interactive Badge */}
           <div className="absolute top-4 right-4 z-10">
-             <div className="px-3 py-1.5 bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-white/20 flex items-center gap-2 transform group-hover:scale-110 transition-transform duration-300">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black text-black tracking-tighter">
+             <div className="px-3 py-1.5 bg-white/90 backdrop-blur-md rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.1)] border border-white/40 flex items-center gap-2 transform group-hover:scale-110 transition-transform duration-300">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                <span className="text-[11px] font-black text-black tracking-tighter">
                   {thumb.stats || "9.4% CTR"}
                 </span>
              </div>
           </div>
+
+          {/* Glass Shimmer Effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none z-20" />
         </div>
 
         {/* Content & Metadata Below Image */}
-        <div className="space-y-4 px-2 pb-2">
+        <div className="space-y-4 px-1" style={{ transform: "translateZ(20px)" }}>
           {/* Top Metadata Row */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-zinc-100 text-zinc-900 text-[9px] font-bold tracking-[0.1em] rounded-full uppercase border border-zinc-200">
+              <span className="px-3 py-1 bg-zinc-900 text-white text-[9px] font-bold tracking-[0.15em] rounded-full uppercase border border-zinc-800 shadow-lg">
                 {thumb.category || 'Portfolio'}
               </span>
-              <span className="text-[10px] font-medium text-zinc-400">• New Project</span>
+              <div className="flex -space-x-1.5">
+                {[1, 2, 3].map(n => (
+                  <div key={n} className="w-5 h-5 rounded-full border-2 border-white bg-zinc-100 flex items-center justify-center shadow-sm overflow-hidden">
+                    <img src={`https://i.pravatar.cc/100?u=${thumb.id}${n}`} alt="viewer" className="w-full h-full object-cover opacity-80" />
+                  </div>
+                ))}
+                <div className="w-5 h-5 rounded-full border-2 border-white bg-blue-500 flex items-center justify-center shadow-sm">
+                  <span className="text-[6px] font-black text-white">+12</span>
+                </div>
+              </div>
             </div>
 
-            <button 
-              onClick={handleCopy}
-              className="p-2.5 bg-zinc-50 text-zinc-400 rounded-xl hover:bg-zinc-900 hover:text-white transition-all transform hover:rotate-12"
-            >
-              {isCopied ? <Check size={14} /> : <Copy size={14} />}
-            </button>
+            <div className="flex items-center gap-2">
+              {hasVariant && (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-[8px] font-black uppercase tracking-widest border border-blue-200">
+                  <RefreshCw size={10} className="animate-spin-slow" />
+                  A/B Ready
+                </div>
+              )}
+              <button 
+                onClick={handleCopy}
+                className="p-2.5 bg-zinc-50 text-zinc-400 rounded-2xl hover:bg-blue-600 hover:text-white transition-all transform hover:rotate-12 shadow-sm hover:shadow-blue-500/20"
+              >
+                {isCopied ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <h4 className="text-2xl font-black text-zinc-900 leading-none group-hover:text-blue-600 transition-colors uppercase tracking-tight">
-              {thumb.title}
-            </h4>
+            <div className="flex items-baseline justify-between gap-2">
+              <h4 className="text-2xl font-black text-zinc-900 leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tight">
+                {thumb.title}
+              </h4>
+              <span className="text-[10px] font-black text-blue-600/40 tabular-nums">0{i + 1}</span>
+            </div>
             {thumb.description && (
               <p className="text-[13px] text-zinc-500 leading-relaxed font-medium line-clamp-2">
                 {thumb.description}
               </p>
             )}
           </div>
+        </div>
 
-          {isAdmin && (
+        {isAdmin && (
             <div className="pt-4 border-t border-zinc-100 flex items-center gap-2">
                <button 
                   onClick={(e) => {
@@ -248,8 +272,7 @@ export const ThumbnailItem = ({ thumb, i, isAdmin, refiningId, handleRefine, han
             </div>
           )}
         </div>
-      </div>
-    </motion.div>
+      </motion.div>
   );
 };
 

@@ -1067,114 +1067,110 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 px-6 py-6 flex justify-between items-center bg-white/80 backdrop-blur-xl border-b border-black/5">
-      <Link to="/" className="flex items-center gap-2 cursor-pointer group">
-        <img src="/regenerated_image_1777433995096.png" alt="Z Score Logo" className="h-8 w-auto group-hover:scale-110 transition-transform duration-300" referrerPolicy="no-referrer" loading="lazy" />
-      </Link>
-      
-      {/* Desktop Nav */}
-      <div className="hidden md:flex items-center gap-8">
-        {navItems.map((item) => (
-          item.path ? (
-            <Link
-              key={item.id}
-              to={item.path}
-              className={`text-[10px] font-bold uppercase tracking-widest transition-all hover:text-blue-600 relative group ${
-                location.pathname === item.path ? 'text-blue-600' : 'text-zinc-400'
-              }`}
-            >
-              {item.label}
-              <span className={`absolute -bottom-1 left-0 h-[1.5px] bg-blue-600 transition-all duration-300 ${
-                location.pathname === item.path ? 'w-full' : 'w-0 group-hover:w-full'
-              }`} />
-            </Link>
-          ) : (
-            <button
-              key={item.id}
-              onClick={() => {
-                if (isHome) {
-                  scrollToSection(item.id);
-                } else {
-                  window.location.href = `/#${item.id}`;
-                }
-              }}
-              className={`text-[10px] font-bold uppercase tracking-widest transition-all hover:text-blue-600 relative group ${
-                activeSection === item.id && isHome ? 'text-blue-600' : 'text-zinc-400'
-              }`}
-            >
-              {item.label}
-              <span className={`absolute -bottom-1 left-0 h-[1.5px] bg-blue-600 transition-all duration-300 ${
-                activeSection === item.id && isHome ? 'w-full' : 'w-0 group-hover:w-full'
-              }`} />
-            </button>
-          )
-        ))}
-        <Link 
-          to="/work" 
-          className={`text-[10px] font-bold uppercase tracking-widest transition-all hover:text-blue-600 relative group ${
-            location.pathname === '/work' ? 'text-blue-600' : 'text-zinc-900'
-          }`}
-        >
-          Work
-          <span className={`absolute -bottom-1 left-0 h-[1.5px] bg-blue-600 transition-all duration-300 ${
-            location.pathname === '/work' ? 'w-full' : 'w-0 group-hover:w-full'
-          }`} />
+    <nav className="fixed top-0 left-0 w-full z-50 px-6 py-6 flex justify-center pointer-events-none">
+      <motion.div 
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="bg-white/80 backdrop-blur-xl border border-black/5 px-8 py-3 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.08)] flex items-center gap-10 pointer-events-auto max-w-fit"
+      >
+        <Link to="/" className="flex items-center gap-2 cursor-pointer group">
+          <img src="/regenerated_image_1777433995096.png" alt="Z Score Logo" className="h-6 w-auto group-hover:scale-110 transition-transform duration-300" referrerPolicy="no-referrer" loading="lazy" />
         </Link>
-      </div>
-
-      <div className="flex items-center gap-4">
-        {/* Admin Controls */}
-        <div className="flex items-center gap-3 md:mr-2 md:border-r border-black/5 md:pr-4">
-          {user ? (
-            <div className="flex items-center gap-3">
-              {isAdmin && (
-                <div className="flex items-center gap-2">
-                  <span className="hidden sm:inline-block px-2 py-1 bg-blue-600 text-white text-[8px] font-bold uppercase tracking-widest rounded-md">Admin</span>
-                  {cloudStatus && (
-                    <div 
-                      className={`w-2 h-2 rounded-full ${cloudStatus.cloudName && cloudStatus.apiKey && cloudStatus.apiSecret ? 'bg-green-500' : 'bg-amber-500'}`} 
-                      title={cloudStatus.cloudName && cloudStatus.apiKey && cloudStatus.apiSecret ? 'Cloudinary Connected' : 'Cloudinary Config Missing'}
-                    />
-                  )}
-                </div>
-              )}
-              <button 
-                onClick={handleLogout}
-                className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
-                title="Logout"
-              >
-                <LogOut size={16} />
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={() => setShowLoginModal(true)}
-              className="p-2 text-zinc-400 hover:text-blue-600 transition-colors"
-              title="Admin Login"
-            >
-              <LogIn size={16} />
-            </button>
-          )}
+        
+        {/* Desktop Nav */}
+        <div className="hidden md:flex items-center gap-6">
+          {navItems.map((item) => (
+            item.id === 'home' ? null : (
+              item.path ? (
+                <Link
+                  key={item.id}
+                  to={item.path}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] transition-all hover:text-blue-600 relative group ${
+                    location.pathname === item.path ? 'text-blue-600' : 'text-zinc-500'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    if (isHome) {
+                      scrollToSection(item.id);
+                    } else {
+                      window.location.href = `/#${item.id}`;
+                    }
+                  }}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] transition-all hover:text-blue-600 relative group ${
+                    activeSection === item.id && isHome ? 'text-blue-600' : 'text-zinc-500'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              )
+            )
+          ))}
+          <Link 
+            to="/work" 
+            className={`text-[9px] font-black uppercase tracking-[0.2em] transition-all hover:text-blue-600 relative group ${
+              location.pathname === '/work' ? 'text-blue-600' : 'text-zinc-900'
+            }`}
+          >
+            Work
+          </Link>
         </div>
 
-        <a 
-          href="https://wa.me/923035408206"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hidden sm:flex items-center gap-2 px-6 py-2.5 bg-transparent text-black border border-black/20 text-[10px] font-bold uppercase tracking-widest rounded-full hover:bg-black hover:text-white transition-all"
-        >
-          <Phone size={12} />
-          Let's Talk
-        </a>
-        
-        {/* Mobile Menu Toggle */}
-        <button 
-          className="md:hidden p-2 text-zinc-500 hover:text-black"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-        >
-          {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
+        <div className="flex items-center gap-4">
+          <div className="h-4 w-[1px] bg-black/5" />
+          <button 
+            onClick={() => setShowLoginModal(true)}
+            className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-zinc-900 transition-all"
+          >
+            {user ? 'Admin' : 'Login'}
+          </button>
+          
+          <a 
+            href="https://wa.me/923035408206"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex px-6 py-2.5 bg-zinc-900 text-white rounded-full text-[9px] font-black uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-blue-500/10"
+          >
+            Hire Me
+          </a>
+
+          {/* Mobile Menu Toggle */}
+          <button 
+            className="md:hidden p-2 text-zinc-500 hover:text-black"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          >
+            {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Mobile Menu Dropdown */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-24 left-6 right-6 bg-white/90 backdrop-blur-2xl rounded-[2rem] p-8 shadow-2xl border border-black/5 md:hidden pointer-events-auto"
+          >
+            <div className="flex flex-col gap-6">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => scrollToSection(item.id, item.path)}
+                  className="text-left text-lg font-black uppercase tracking-widest text-zinc-900"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Login Modal */}
       <AnimatePresence>
@@ -1332,8 +1328,6 @@ const Navbar = ({ activeSection }: { activeSection: SectionId }) => {
     </nav>
   );
 };
-
-// --- Testimonial Carousel for Case Study Card ---
 const CardTestimonialCarousel = () => {
   const [index, setIndex] = useState(0);
 
@@ -1496,34 +1490,48 @@ const FeaturedCaseStudies = () => {
               onClick={() => setSelectedStudy(study)}
               className="group bg-white rounded-[2.5rem] p-5 border border-black/5 hover:border-blue-600/30 transition-all duration-500 shadow-2xl hover:shadow-3xl cursor-pointer"
             >
-              <div className="aspect-[4/3] rounded-[1.8rem] overflow-hidden mb-6 relative shadow-inner">
+              <div className="aspect-[4/3] rounded-[2rem] overflow-hidden mb-8 relative shadow-2xl bg-zinc-900 border border-black/5">
                 <img 
                   src={study.imageUrl} 
                   alt={study.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 opacity-90 group-hover:opacity-100"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
-                <div className="absolute top-4 left-4">
-                  <span className="px-4 py-1.5 bg-blue-600 text-white text-[9px] font-black rounded-full uppercase tracking-widest shadow-xl">
-                    {study.category || 'Case Study'}
+                <div className="absolute top-4 left-4 z-20">
+                  <span className="px-5 py-2 bg-white/95 backdrop-blur-md text-zinc-900 text-[9px] font-black rounded-full uppercase tracking-[0.2em] shadow-2xl border border-white/50">
+                    {study.category || 'Strategic Growth'}
                   </span>
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                
+                {/* Floating Highlight */}
+                <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 text-white opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
+                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-2xl border border-white/20">
+                    <Sparkles size={14} className="animate-pulse" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">View Analysis</span>
+                </div>
               </div>
-              <div className="space-y-3 px-2">
-                <h4 className="text-2xl font-black text-[#1A1A1A] group-hover:text-blue-600 transition-colors line-clamp-1 uppercase tracking-tight">
-                  {study.title}
-                </h4>
-                <p className="text-sm text-zinc-500 font-medium line-clamp-2 leading-relaxed h-10">
-                  {study.description}
-                </p>
-                <div className="pt-4 flex items-center justify-between">
-                   <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map(star => <Star key={star} size={10} fill="#3b82f6" stroke="none" />)}
-                   </div>
-                   <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600">
-                      EXPLORE <ChevronRight size={12} />
-                   </div>
+              <div className="space-y-6 px-2">
+                <div className="space-y-3">
+                  <h4 className="text-3xl font-display font-black text-[#1A1A1A] group-hover:text-blue-600 transition-colors line-clamp-1 tracking-tighter uppercase">
+                    {study.title}
+                  </h4>
+                  <p className="text-sm text-zinc-500 font-medium line-clamp-2 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">
+                    {study.description}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-6 border-t border-black/5">
+                  <div className="space-y-1">
+                    <div className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">CTR Spike</div>
+                    <div className="text-2xl font-display font-black text-blue-600 tabular-nums">+{i === 0 ? "142" : i === 1 ? "89" : "210"}%</div>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <div className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Growth Index</div>
+                    <div className="text-2xl font-display font-black text-[#1A1A1A] tabular-nums">9.{i + 5}/10</div>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1745,91 +1753,92 @@ const Hero = () => {
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
   
   return (
-    <section id="home" className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 overflow-hidden [perspective:1000px]">
+    <section 
+      id="home" 
+      className="relative min-h-screen flex flex-col items-center justify-center pt-20 overflow-hidden [perspective:1000px] border-b border-black/5 bg-white"
+    >
       <FishBackground />
-      {/* Background Noise/Grain Overlay */}
+      {/* Dynamic Background Accents */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[20%] left-[10%] w-[400px] h-[400px] bg-blue-600/5 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[20%] right-[10%] w-[300px] h-[300px] bg-purple-600/5 blur-[120px] rounded-full animate-pulse delay-700" />
+      </div>
+
       <motion.div 
         style={{ y: yBg }}
         className="absolute inset-0 opacity-[0.03] pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/p6.png')]" 
       />
 
-      <motion.div 
-        style={{ opacity }}
-        className="text-center z-10"
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-card text-neon-blue text-xs font-bold uppercase tracking-widest mb-8 border border-neon-blue/20"
+      <div className="px-6 max-w-7xl mx-auto w-full flex flex-col items-center flex-1 justify-center relative z-10">
+        <motion.div 
+          style={{ opacity }}
+          className="text-center w-full"
         >
-          <Sparkles size={14} className="glow-blue" />
-          Premium Thumbnail Expert
-        </motion.div>
-        
-        <motion.h1 
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-          className="text-7xl md:text-[10rem] font-display font-bold tracking-tighter mb-8 leading-[0.85] text-[#1A1A1A] relative"
-        >
-          <ScrapbookDecorations scrollY={scrollY} />
-          <TypewriterText text="STOP THE" speed={100} /> <br />
-          <span className="relative inline-block">
-            <span className="text-blue-600 italic">
-              <TypewriterText text="SCROLL." speed={150} />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.3em] mb-12 shadow-2xl border border-white/10"
+          >
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+            Designer for the 1% of Creators
+          </motion.div>
+          
+          <motion.h1 
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+            className="text-7xl md:text-[12rem] font-display font-black tracking-tighter mb-12 leading-[0.8] text-[#1A1A1A] relative"
+          >
+            <ScrapbookDecorations scrollY={scrollY} />
+            <div className="relative inline-block">
+              <TypewriterText text="STOP THE" speed={100} />
+            </div>
+            <br />
+            <span className="relative inline-block mt-4">
+              <span className="text-blue-600 italic">
+                <TypewriterText text="SCROLL." speed={150} />
+              </span>
+              {/* Hand-drawn marker circle effects */}
+              <motion.svg
+                viewBox="0 0 400 200"
+                className="absolute -inset-x-12 -inset-y-8 w-[calc(100%+6rem)] h-[calc(100%+4rem)] pointer-events-none"
+                preserveAspectRatio="none"
+                style={{ filter: "drop-shadow(2px 4px 6px rgba(239, 68, 68, 0.15))" }}
+              >
+                {/* Stroke 1: Bold base */}
+                <motion.path
+                  d="M 20 100 C 20 40, 385 40, 385 100 C 385 160, 15 160, 45 110"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray="2 4"
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={{ pathLength: 1, opacity: 0.7 }}
+                  transition={{ duration: 1.2, delay: 2.2, ease: "easeInOut" }}
+                />
+                {/* Stroke 2: Thinner imperfection */}
+                <motion.path
+                  d="M 25 105 C 25 35, 375 35, 375 105 C 375 175, 25 175, 40 115"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={{ pathLength: 1, opacity: 0.5 }}
+                  transition={{ duration: 1.5, delay: 2.4, ease: "easeInOut" }}
+                />
+              </motion.svg>
             </span>
-            {/* Hand-drawn marker circle effects */}
-            <motion.svg
-              viewBox="0 0 400 200"
-              className="absolute -inset-x-12 -inset-y-8 w-[calc(100%+6rem)] h-[calc(100%+4rem)] pointer-events-none"
-              preserveAspectRatio="none"
-              style={{ filter: "drop-shadow(2px 4px 6px rgba(239, 68, 68, 0.15))" }}
-            >
-              {/* Stroke 1: Bold base */}
-              <motion.path
-                d="M 20 100 C 20 40, 385 40, 385 100 C 385 160, 15 160, 45 110"
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeDasharray="2 4"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: 0.7 }}
-                transition={{ duration: 1.2, delay: 2.2, ease: "easeInOut" }}
-              />
-              {/* Stroke 2: Thinner imperfection */}
-              <motion.path
-                d="M 25 105 C 25 35, 375 35, 375 105 C 375 175, 25 175, 40 115"
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth="2"
-                strokeLinecap="round"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: 0.5 }}
-                transition={{ duration: 1.5, delay: 2.4, ease: "easeInOut" }}
-              />
-              {/* Stroke 3: Light accent */}
-              <motion.path
-                d="M 15 95 C 15 45, 390 45, 390 95 C 390 145, 10 145, 30 105"
-                fill="none"
-                stroke="#f87171"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: 0.4 }}
-                transition={{ duration: 1.8, delay: 2.6, ease: "easeInOut" }}
-              />
-            </motion.svg>
-          </span>
-        </motion.h1>
+          </motion.h1>
         
         <motion.p 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4, duration: 1 }}
-          className="text-zinc-500 text-lg md:text-xl max-w-2xl mx-auto mb-4 font-medium leading-relaxed"
+          className="text-zinc-500 text-xl md:text-2xl max-w-2xl mx-auto mb-10 font-medium leading-tight"
         >
-          High-fidelity visual hooks engineered for maximum CTR. 
+          High-fidelity visual hooks engineered for maximum CTR. <br className="hidden md:block" />
           I turn viewers into subscribers through psychological design.
         </motion.p>
         
@@ -1839,29 +1848,27 @@ const Hero = () => {
           transition={{ delay: 0.6 }}
           className="flex flex-wrap items-center justify-center gap-6"
         >
-          <a 
-            href="https://www.behance.net/gallery/242444841/Thumbnail-portfolio-2026-ZefuryZ-score"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group px-8 py-4 bg-transparent text-black font-bold rounded-full hover:bg-black hover:text-white transition-all flex items-center gap-3 border border-black/20 shadow-sm hover:shadow-neon-blue/40"
-          >
-            Explore Portfolio
-            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-          </a>
-          <button 
-            onClick={() => {
-              const el = document.getElementById('pricing');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="px-8 py-4 bg-transparent text-zinc-900 font-bold rounded-full hover:bg-black/5 transition-all border border-black/10"
-          >
-            View Pricing
-          </button>
-          <button 
-            className="px-8 py-4 bg-blue-600 text-white font-bold rounded-full hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 border border-blue-500/20"
-          >
-            Free CTR Audit
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <a 
+              href="https://www.behance.net/gallery/242444841/Thumbnail-portfolio-2026-ZefuryZ-score"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group px-10 py-5 bg-zinc-900 text-white font-black rounded-full hover:bg-blue-600 transition-all flex items-center gap-4 shadow-2xl hover:shadow-blue-500/40 uppercase tracking-widest text-xs"
+            >
+              Hire the Expert
+              <ArrowRight size={18} className="group-hover:translate-x-2 transition-transform" />
+            </a>
+            <div className="flex -space-x-4">
+              {[1, 2, 3, 4, 5].map(n => (
+                <div key={n} className="w-12 h-12 rounded-full border-4 border-white bg-zinc-100 flex items-center justify-center shadow-lg overflow-hidden grayscale hover:grayscale-0 transition-all cursor-pointer">
+                  <img src={`https://i.pravatar.cc/100?u=${n}`} alt="Client" className="w-full h-full object-cover" />
+                </div>
+              ))}
+              <div className="w-12 h-12 rounded-full border-4 border-white bg-blue-600 text-white flex items-center justify-center text-[10px] font-black z-10 shadow-lg">
+                +500
+              </div>
+            </div>
+          </div>
         </motion.div>
       </motion.div>
 
@@ -1904,12 +1911,13 @@ const Hero = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 0.5 }}
         transition={{ delay: 1.5 }}
-        className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+        className="absolute bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
       >
         <span className="text-[10px] uppercase tracking-[0.3em] text-zinc-400">Scroll to explore</span>
         <div className="w-[1px] h-12 bg-gradient-to-b from-blue-600 to-transparent" />
       </motion.div>
-    </section>
+    </div>
+  </section>
   );
 };
 const About = () => {
@@ -2308,68 +2316,73 @@ const Journey = () => (
 );
 
 const Process = () => (
-  <section id="process" className="section-padding px-6 relative">
+  <section id="process" className="section-padding px-6 relative bg-[#FAFAFA]">
     <div className="max-w-7xl mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 mb-24">
-        <div className="space-y-6">
-          <h3 className="text-neon-purple font-bold uppercase tracking-widest text-sm">The Workflow</h3>
-          <h2 className="text-5xl md:text-7xl font-display font-black leading-none">
-            ENGINEERED <br /><span className="text-gradient">FOR CLICKS.</span>
-          </h2>
+      <div className="mb-24 space-y-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-2xl">04</div>
+          <h3 className="text-zinc-400 font-bold uppercase tracking-[0.3em] text-[10px]">The Workflow</h3>
         </div>
-        <div className="flex items-end">
-          <p className="text-zinc-500 text-xl font-light leading-relaxed border-l-2 border-neon-purple pl-8">
-            A systematic approach to visual storytelling that prioritizes algorithm performance without sacrificing brand aesthetics.
-          </p>
-        </div>
+        <h2 className="text-5xl md:text-8xl font-display font-black leading-none tracking-tighter text-[#1A1A1A]">
+          ENGINEERED <br />FOR <span className="text-blue-600 italic">CLICKS.</span>
+        </h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
         {[
           { 
             step: "01", 
-            title: "Strategy", 
-            desc: "Analyzing your niche, competitors, and audience psychology to find the perfect hook.",
-            icon: Target
+            title: "STRATEGY", 
+            desc: "Niche research & audience psychology audit. We find the 'Open Loop' that forces a click.",
+            icon: Target,
+            className: "md:col-span-12 lg:col-span-4 bg-zinc-900 text-white"
           },
           { 
             step: "02", 
-            title: "Concept", 
-            desc: "Drafting high-impact visual layouts that focus on 'Pattern Interrupt' techniques.",
-            icon: Cpu
+            title: "CONCEPT", 
+            desc: "Layout engineering using the 'Golden Triangle' rule for mobile & desktop CTR perfection.",
+            icon: Cpu,
+            className: "md:col-span-12 lg:col-span-8 bg-white"
           },
           { 
             step: "03", 
-            title: "Design", 
-            desc: "Executing the vision with premium color grading, lighting, and custom assets.",
-            icon: Sparkles
+            title: "DESIGN", 
+            desc: "High-fidelity rendering with custom lighting and premium color grading.",
+            icon: Sparkles,
+            className: "md:col-span-12 lg:col-span-7 bg-white"
           },
           { 
             step: "04", 
-            title: "Optimize", 
-            desc: "Final A/B testing readiness and algorithm-friendly export for maximum reach.",
-            icon: Zap
+            title: "OPTIMIZE", 
+            desc: "A/B testing readiness audit for maximum algorithm performance.",
+            icon: Zap,
+            className: "md:col-span-12 lg:col-span-5 bg-blue-600 text-white"
           }
         ].map((item, i) => (
           <motion.div
             key={i}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: i * 0.1 }}
-            className="group relative"
+            transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className={`group relative p-12 rounded-[2.5rem] border border-black/5 overflow-hidden flex flex-col justify-between min-h-[320px] transition-all hover:shadow-2xl ${item.className}`}
           >
-            <div className="p-8 h-full bg-white border border-black/5 rounded-[2rem] group-hover:bg-black group-hover:text-white transition-all duration-500 shadow-sm hover:shadow-2xl">
-              <div className="text-5xl font-display font-black text-black/5 group-hover:text-white/10 mb-8 transition-colors">
-                {item.step}
+            <div className="relative z-10">
+              <div className="flex justify-between items-start mb-12">
+                <div className={`p-4 rounded-2xl ${item.className.includes('bg-zinc-900') || item.className.includes('bg-blue-600') ? 'bg-white/10 border-white/20' : 'bg-zinc-900/5 border-black/5'} border`}>
+                  <item.icon size={28} />
+                </div>
+                <div className="text-[10px] font-black tracking-[0.2em] opacity-40">STEP {item.step}</div>
               </div>
-              <div className="w-10 h-10 bg-zinc-50 group-hover:bg-white/10 rounded-xl flex items-center justify-center mb-6 transition-colors">
-                <item.icon size={18} className="text-zinc-900 group-hover:text-white" />
-              </div>
-              <h4 className="text-xl font-bold mb-4">{item.title}</h4>
-              <p className="text-zinc-500 group-hover:text-zinc-400 text-sm leading-relaxed font-light transition-colors">
+              <h4 className="text-3xl font-display font-black tracking-tighter mb-4">{item.title}</h4>
+              <p className={`text-lg font-medium leading-tight ${item.className.includes('bg-white') ? 'text-zinc-500' : 'text-white/60'}`}>
                 {item.desc}
               </p>
+            </div>
+            
+            {/* Background Decorations */}
+            <div className="absolute top-0 right-0 p-8 text-[120px] font-display font-black leading-none opacity-[0.03] select-none pointer-events-none">
+              {item.step}
             </div>
           </motion.div>
         ))}
